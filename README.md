@@ -2,7 +2,13 @@
 #### Project Oura:  A cloud-based stock trading bot.
 Copyright 2020 AgileData.Guru
 
-## Tools
+### Requirements
+* MongoDB 4.2
+* Python 3.7.x
+* Alpha Vantage API Key
+* Alpaca API key
+
+### Tools
 * Project Management:  https://trello.com/
 * Sensitive File Storage:  https://onedrive.live.com/
 * Source Code:  https://github.com/
