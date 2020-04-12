@@ -1,5 +1,5 @@
-# Oura
-#### Project Oura:  A cloud-based stock trading bot.
+# Ouro
+#### Project Ouro:  A cloud-based stock trading bot.
 Copyright 2020 AgileData.Guru
 
 ### Requirements
