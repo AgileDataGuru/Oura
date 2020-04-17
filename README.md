@@ -5,8 +5,12 @@ Copyright 2020 AgileData.Guru
 ### Requirements
 * MongoDB 4.2
 * Python 3.7.x
-* Alpha Vantage API Key
-* Alpaca API key
+* The following environment variables set
+    * Alpaca API key (APCA_API_KEY_ID)
+    * Secret Key (APCA_API_SECRET_KEY)
+    * End point to use (APCA_API_BASE_URL)
+    * Trade Data End Point (APCA_API_DATA_URL)
+    * AlphaVantage API Key (ALPHAVANTAGE_API_KEY)
 
 ### Tools
 * Project Management:  https://trello.com/

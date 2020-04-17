@@ -4,10 +4,11 @@
 # https://github.com/AgileDataGuru/Ouro
 
 # Required modules
-import os                       # for basic OS functions
-import logging                  # for application logging
-import csv                      # for reading static data
-import yfinance as yf           # for historical ticker data
+import os                               # for basic OS functions
+import logging                          # for application logging
+import csv                              # for reading static data
+import alpaca_trade_api as tradeapi     # required for trading
+
 
 # Setup Logging
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
@@ -17,5 +18,17 @@ with open('sp500.csv', mode='r', encoding='utf-8-sig') as infile:
     reader = csv.reader(infile)
     splist = {rows[0]:rows[2] for rows in reader}
 
-test = yf.Ticker("AMZN")
-print (test.info)
+# Setup the API
+api = tradeapi.REST()
+
+# Get key pieces of information
+account = api.get_account()
+orders = api.list_orders()
+positions = api.list_positions()
+
+print (account)
+print (orders)
+print(positions)
+
+
+
