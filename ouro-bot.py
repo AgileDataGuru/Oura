@@ -77,8 +77,20 @@ api = tradeapi.REST()
 account = api.get_account()
 orders = api.list_orders()
 positions = api.list_positions()
+assets = api.list_assets()
 
-lastorder = GetLastTrx(splist, orders)
+slist = []
+for x in assets:
+    if x.exchange == 'NASDAQ' or x.exchange=='NYSE':
+        if x.tradable is True:
+            slist.append(x.symbol)
+
+print(slist)
+print(slist.__sizeof__())
+
+
+
+#lastorder = GetLastTrx(splist, orders)
 
 # rsiraw = api.alpha_vantage.techindicators('RSI', output_format='JSON', symbol='CVS', interval='1min', time_period='30', series_type='close')
 # rsi = json.loads(json.dumps(rsiraw))
@@ -86,8 +98,8 @@ lastorder = GetLastTrx(splist, orders)
 
 
 
-for s in splist:
-    print(s, RsiSignals(lastorder[s], GetRsi(s)))
+#for s in splist:
+#    print(s, RsiSignals(lastorder[s], GetRsi(s)))
 
 
 
