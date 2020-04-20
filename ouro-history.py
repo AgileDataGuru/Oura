@@ -57,17 +57,19 @@ for x in slist:
     startdate_str = startdate.strftime('%Y-%m-%d')
     data = yf.download(x, startdate_str, interval='1d', prepost='False', group_by='ticker')
     jsondata = json.loads(data.to_json(orient='index'))
+
+    # Transform the json into a format easier to analyze
     for r in jsondata:
         tradedate = datetime.datetime.fromtimestamp(int(r) / 1e3)
         row = {
             'ticker': x,
             'tradedate': tradedate.strftime('%Y-%m-%d'),
-            'open': jsondata[r]['Open']
-            # high
-            # low
-            # close
-            # adj close
-            # volume
+            'open': jsondata[r]['Open'],
+            'high': jsondata[r]['High'],
+            'low': jsondata[r]['Low'],
+            'close': jsondata[r]['Close'],
+            'adjclose': jsondata[r]['Adj Close'],
+            'volume': jsondata[r]['Volume']
         }
         print (row)
 
