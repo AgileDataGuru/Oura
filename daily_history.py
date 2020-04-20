@@ -75,7 +75,7 @@ for x in slist:
         logging.debug('No date found for ' + x + '; getting data since ' + startdate_str)
 
     # If the last date was in the past, get new data; otherwise, skip it
-    if startdate_str != str(yesterday):
+    if startdate_str != str(yesterday) and startdate_str != str(today):
 
         data = yf.download(x, startdate_str, interval='1d', prepost='False', group_by='ticker')
         try:
