@@ -76,9 +76,14 @@ for x in slist:
 
     # If the last date was in the past, get new data; otherwise, skip it
     if startdate_str != str(yesterday):
-        logging.info ('(' + str(counter) + ' of ' + str(len(slist)) + ') Getting info for ' + x + ' since ' + startdate_str)
+
         data = yf.download(x, startdate_str, interval='1d', prepost='False', group_by='ticker')
-        jsondata = json.loads(data.to_json(orient='index'))
+        try:
+            jsondata = json.loads(data.to_json(orient='index'))
+            logging.info('(' + str(counter) + ' of ' + str(len(slist)) + ') Getting data for ' + x + ' since ' + startdate_str)
+        except:
+            jsondata = {}
+            logging.warning ('Data for ' + x + ' has problems; it is being skipped.')
 
         # Transform the json into a format easier to analyze and write it to Cosmos DB
         for r in jsondata:
