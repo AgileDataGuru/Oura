@@ -13,10 +13,10 @@ import datetime                         # used for stock timestamps
 import json
 import uuid
 from azure.cosmos import exceptions, CosmosClient, PartitionKey
-from dateutil.parser import parse       # used to create date/time objects from strings
+from dateutil.parser import parse       # used to create date/time objects from stringsec
 
 # Setup Logging
-logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
+logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
 logging.info('OURO-HISTORY logging enabled.')
 
 # Setup the API
@@ -55,7 +55,12 @@ today = datetime.date.today()
 yesterday = today - datetime.timedelta(days=1)
 earliest = today - datetime.timedelta(days=60)
 
+counter = 0
+
 for x in slist:
+    # count which item I'm on
+    counter = counter + 1
+
     # Get the last time daily data for this stock was cached
     query = "select value max(d.tradedate) from daily d where d.ticker = '" + x + "'"
     try:
@@ -71,6 +76,7 @@ for x in slist:
 
     # If the last date was in the past, get new data; otherwise, skip it
     if startdate_str != str(yesterday):
+        logging.info ('(' + str(counter) + ' of ' + str(len(slist)) + ') Getting info for ' + x + ' since ' + startdate_str)
         data = yf.download(x, startdate_str, interval='1d', prepost='False', group_by='ticker')
         jsondata = json.loads(data.to_json(orient='index'))
 
