@@ -14,6 +14,7 @@ import json
 import uuid
 from azure.cosmos import exceptions, CosmosClient, PartitionKey
 from dateutil.parser import parse       # used to create date/time objects from stringsec
+import time
 
 # Setup Logging
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
@@ -56,10 +57,17 @@ yesterday = today - datetime.timedelta(days=1)
 earliest = today - datetime.timedelta(days=60)
 
 counter = 0
+procstart = datetime.datetime.now()
 
 for x in slist:
     # count which item I'm on
     counter = counter + 1
+
+    # check the throttle; limit this to 3 request per second
+    throttle = ((datetime.datetime.now()-procstart).total_seconds())/3
+    if counter > throttle:
+        time.sleep(counter-throttle)
+        logging.debug ('Sleeping ' + str(counter-throttle) + ' seconds to throttle the process.')
 
     # Get the last time daily data for this stock was cached
     query = "select value max(d.tradedate) from daily d where d.ticker = '" + x + "'"
