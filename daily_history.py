@@ -17,7 +17,7 @@ from dateutil.parser import parse       # used to create date/time objects from 
 import time
 
 # Setup Logging
-logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
+logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
 logging.info('OURO-HISTORY logging enabled.')
 
 # Setup the API
@@ -87,8 +87,9 @@ for x in slist:
 
         data = yf.download(x, startdate_str, interval='1d', prepost='False', group_by='ticker')
         try:
+            logging.info(
+                '(' + str(counter) + ' of ' + str(len(slist)) + ') Getting data for ' + x + ' since ' + startdate_str)
             jsondata = json.loads(data.to_json(orient='index'))
-            logging.info('(' + str(counter) + ' of ' + str(len(slist)) + ') Getting data for ' + x + ' since ' + startdate_str)
         except:
             jsondata = {}
             logging.warning ('Data for ' + x + ' has problems; it is being skipped.')
@@ -114,7 +115,8 @@ for x in slist:
                 logging.debug('Created document for ' + x + ' on ' + tradedate.strftime('%Y-%m-%d'))
             except:
                 logging.error('Could not create document for ' + x + ' on ' + tradedate.strftime('%Y-%m-%d'))
-
+        logging.info(
+            '(' + str(counter) + ' of ' + str(len(slist)) + ') Finished processing ' + x)
 
 
 
