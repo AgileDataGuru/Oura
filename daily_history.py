@@ -39,8 +39,8 @@ for x in assets:
 logging.info('Universe of stocks created; ' + str(len(slist)) + ' stocks in the list.')
 
 # Initialize the Cosmos client
-endpoint = "https://ouro.documents.azure.com:443"
-key = 'xrEm8rxq1R7wjxUZjVYP1cxX8clN4LTpOqmKUmiPc5GOOtI1GjyzjhC2VeAl0xboJqZ1Kx3la5jAB4fPxNtoCQ=='
+endpoint = os.environ.get("OURO_DOCUMENTS_ENDPOINT", "SET OURO_DOCUMENTS_ENDPOINT IN ENVIRONMENT")
+key = os.environ.get("OURO_DOCUMENTS_KEY", "SET OURO_DOCUMENTS_KEY IN ENVIRONMENT")
 client = CosmosClient(endpoint, key)
 database_name = 'stockdata'
 database = client.create_database_if_not_exists(id=database_name)
@@ -56,23 +56,24 @@ today = datetime.date.today()
 yesterday = today - datetime.timedelta(days=1)
 earliest = today - datetime.timedelta(days=60)
 
-counter = -1
+counter = -1    # the number of items processed
+rucounter = 0     # the number of requests made
 procstart = datetime.datetime.now()
 
 for x in slist:
     # count which item I'm on
     counter = counter + 1
 
-    # check the throttle; limit this to 35 request per second
-    # Note:  This is approximately 100RU/sec
-    throttle = ((datetime.datetime.now()-procstart).total_seconds())/35
-    if counter > throttle:
-        time.sleep(counter-throttle)
-        logging.debug ('Sleeping ' + str(counter-throttle) + ' seconds to throttle the process.')
+    # check the throttle; limit this process to 100RU/sec
+    throttle = ((datetime.datetime.now()-procstart).total_seconds())*100
+    if rucounter > throttle:
+        logging.debug('Sleeping ' + str((rucounter - throttle) / 100) + ' seconds to throttle the process.')
+        time.sleep((rucounter-throttle)/100)
 
     # Get the last time daily data for this stock was cached
     # Note: 4.24 RU
     query = "select value max(d.tradedate) from daily d where d.ticker = '" + x + "'"
+    rucounter = rucounter + 1
     try:
         dt = list(container.query_items(
             query=query,
@@ -113,6 +114,7 @@ for x in slist:
             }
             # write the data
             # Note:  Approximately 4.2 RU
+            rucounter = rucounter + 1
             try:
                 container.create_item(body=row)
                 logging.debug('Created document for ' + x + ' on ' + tradedate.strftime('%Y-%m-%d'))
