@@ -17,7 +17,7 @@ from dateutil.parser import parse       # used to create date/time objects from 
 import time
 
 # Setup Logging
-logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
+logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
 logging.info('OURO-HISTORY logging enabled.')
 
 # Setup the API
