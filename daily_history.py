@@ -56,20 +56,22 @@ today = datetime.date.today()
 yesterday = today - datetime.timedelta(days=1)
 earliest = today - datetime.timedelta(days=60)
 
-counter = 0
+counter = -1
 procstart = datetime.datetime.now()
 
 for x in slist:
     # count which item I'm on
     counter = counter + 1
 
-    # check the throttle; limit this to 3 request per second
-    throttle = ((datetime.datetime.now()-procstart).total_seconds())/3
+    # check the throttle; limit this to 35 request per second
+    # Note:  This is approximately 100RU/sec
+    throttle = ((datetime.datetime.now()-procstart).total_seconds())/35
     if counter > throttle:
         time.sleep(counter-throttle)
         logging.debug ('Sleeping ' + str(counter-throttle) + ' seconds to throttle the process.')
 
     # Get the last time daily data for this stock was cached
+    # Note: 4.24 RU
     query = "select value max(d.tradedate) from daily d where d.ticker = '" + x + "'"
     try:
         dt = list(container.query_items(
@@ -85,7 +87,7 @@ for x in slist:
     # If the last date was in the past, get new data; otherwise, skip it
     if startdate_str != str(yesterday) and startdate_str != str(today):
 
-        data = yf.download(x, startdate_str, interval='1d', prepost='False', group_by='ticker')
+        data = yf.download(x, start=startdate_str, end=yesterday, interval='1d', prepost='False', group_by='ticker')
         try:
             logging.info(
                 '(' + str(counter) + ' of ' + str(len(slist)) + ') Getting data for ' + x + ' since ' + startdate_str)
@@ -110,6 +112,7 @@ for x in slist:
                 'volume': jsondata[r]['Volume']
             }
             # write the data
+            # Note:  Approximately 4.2 RU
             try:
                 container.create_item(body=row)
                 logging.debug('Created document for ' + x + ' on ' + tradedate.strftime('%Y-%m-%d'))
