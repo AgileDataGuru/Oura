@@ -12,6 +12,8 @@ import uuid
 from azure.cosmos import exceptions, CosmosClient, PartitionKey
 from dateutil.parser import parse       # used to create date/time objects from stringsec
 import time
+import pandas as pd
+
 
 # Setup Logging
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
@@ -29,3 +31,33 @@ container = database.create_container_if_not_exists(
     offer_throughput=400
 )
 logging.info ('Azure-Cosmos client initialized; connected to ' + endpoint)
+
+# get list of stocks in the universe
+query = "select distinct value d.ticker from daily d"
+try:
+    stocklist = list(container.query_items(
+        query=query,
+        enable_cross_partition_query=True
+    ))
+    logging.debug('Retrieve daily data.')
+except:
+    logging.debug('No daily date available.')
+
+# process the daily stocks
+for stock in stocklist:
+
+# Get all the daily data for the past 60 days for the given stock
+# Note: 4.88 RU per 100 rows
+    query = "SELECT d.id, d.ticker, d.tradedate, d.open, d.adjclose, d.volume FROM daily d where d.ticker = '" + stock + "'"
+    #try:
+    data = list(container.query_items(
+        query=query,
+        enable_cross_partition_query=True
+    ))
+    logging.debug('Retrieve daily data.')
+    #except:
+    #    logging.debug('No daily date available.')
+
+    print(data)
+    df = pd.DataFrame(data)
+    print (df)
