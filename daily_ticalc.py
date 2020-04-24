@@ -66,12 +66,14 @@ for stock in stocklist:
         df['RSI14'] = ta.RSI(df['adjclose'], timeperiod=14)
         df['SMA14'] = ta.SMA(df['adjclose'], timeperiod=14)
         df['EMA14'] = ta.EMA(df['adjclose'], timeperiod=14)
-        # ValueError: Length of values does not match length of index
-        # df['MACD'] = ta.MACD(df['adjclose'], fastperiod=12, slowperiod=26, signalperiod=9)
+        df['MACD0'] = ta.MACD(df['adjclose'], fastperiod=12, slowperiod=26, signalperiod=9)[0]
+        df['MACD1'] = ta.MACD(df['adjclose'], fastperiod=12, slowperiod=26, signalperiod=9)[1]
+        df['MACD2'] = ta.MACD(df['adjclose'], fastperiod=12, slowperiod=26, signalperiod=9)[2]
         df['ADX14'] = ta.ADX(df['high'], df['low'], df['adjclose'])
         df['CCI14'] = ta.CCI(df['high'], df['low'], df['adjclose'], timeperiod=10)
         df['AROONUP'], df['AROONDN'] = ta.AROON(df['high'], df['low'], timeperiod=14)
-        # ValueError: Length of values does not match length of index
-        # df['BBANDS14'] = ta.BBANDS(df['adjclose'], timeperiod=5, nbdevup=2, nbdevdn=2, matype=0)
+        df['BBANDS14-0'] = ta.BBANDS(df['adjclose'], timeperiod=5, nbdevup=2, nbdevdn=2, matype=0)[0]
+        df['BBANDS14-1'] = ta.BBANDS(df['adjclose'], timeperiod=5, nbdevup=2, nbdevdn=2, matype=0)[1]
+        df['BBANDS14-2'] = ta.BBANDS(df['adjclose'], timeperiod=5, nbdevup=2, nbdevdn=2, matype=0)[2]
         df['AD14'] = ta.AD(df['high'], df['low'], df['adjclose'], df['volume'])
         df['OBV14'] = ta.OBV(df['adjclose'], df['volume'])
