@@ -13,6 +13,7 @@ from azure.cosmos import exceptions, CosmosClient, PartitionKey
 from dateutil.parser import parse       # used to create date/time objects from stringsec
 import time
 import pandas as pd
+import talib as ta
 
 
 # Setup Logging
@@ -48,16 +49,29 @@ for stock in stocklist:
 
 # Get all the daily data for the past 60 days for the given stock
 # Note: 4.88 RU per 100 rows
-    query = "SELECT d.id, d.ticker, d.tradedate, d.open, d.adjclose, d.volume FROM daily d where d.ticker = '" + stock + "'"
-    #try:
-    data = list(container.query_items(
-        query=query,
-        enable_cross_partition_query=True
-    ))
-    logging.debug('Retrieve daily data.')
-    #except:
-    #    logging.debug('No daily date available.')
+    query = "SELECT d.id, d.ticker, d.tradedate, d.high, d.low, d.open, d.adjclose, d.volume FROM daily d where d.ticker = '" + stock + "'"
+    df = pd.DataFrame()
+    try:
+        data = list(container.query_items(
+            query=query,
+            enable_cross_partition_query=True
+        ))
+        logging.debug('Retrieve daily data.')
+        df = pd.DataFrame(data)
+    except:
+        logging.debug('No daily date available.')
 
-    print(data)
-    df = pd.DataFrame(data)
-    print (df)
+    if not df.empty:
+        # calculate the technical indicators if there is data to do so
+        df['RSI14'] = ta.RSI(df['adjclose'], timeperiod=14)
+        df['SMA14'] = ta.SMA(df['adjclose'], timeperiod=14)
+        df['EMA14'] = ta.EMA(df['adjclose'], timeperiod=14)
+        # ValueError: Length of values does not match length of index
+        # df['MACD'] = ta.MACD(df['adjclose'], fastperiod=12, slowperiod=26, signalperiod=9)
+        df['ADX14'] = ta.ADX(df['high'], df['low'], df['adjclose'])
+        df['CCI14'] = ta.CCI(df['high'], df['low'], df['adjclose'], timeperiod=10)
+        df['AROONUP'], df['AROONDN'] = ta.AROON(df['high'], df['low'], timeperiod=14)
+        # ValueError: Length of values does not match length of index
+        # df['BBANDS14'] = ta.BBANDS(df['adjclose'], timeperiod=5, nbdevup=2, nbdevdn=2, matype=0)
+        df['AD14'] = ta.AD(df['high'], df['low'], df['adjclose'], df['volume'])
+        df['OBV14'] = ta.OBV(df['adjclose'], df['volume'])
