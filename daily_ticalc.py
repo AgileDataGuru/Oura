@@ -78,3 +78,26 @@ for stock in stocklist:
         df['AD14'] = ta.AD(df['high'], df['low'], df['adjclose'], df['volume'])
         df['OBV14'] = ta.OBV(df['adjclose'], df['volume'])
 
+## need to get the last date in daily indicators
+        for x in df:
+            row = {
+                    'id': str(id),
+                    'ticker': x,
+                    'tradedate': tradedate,
+                    'open': jsondata[r]['Open'],
+                    'high': jsondata[r]['High'],
+                    'low': jsondata[r]['Low'],
+                    'close': jsondata[r]['Close'],
+                    'adjclose': jsondata[r]['Adj Close'],
+                    'volume': jsondata[r]['Volume']
+                }
+                # write the data
+                # Note:  Approximately 4.2 RU
+                rucounter = rucounter + 1
+                try:
+                    #container.create_item(body=row)
+                    logging.debug('Created document for ' + x + ' on ' + tradedate)
+                except:
+                    logging.error('Could not create document for ' + x + ' on ' + tradedate)
+            logging.info(
+                '(' + str(counter) + ' of ' + str(len(slist)) + ') Finished processing ' + x)

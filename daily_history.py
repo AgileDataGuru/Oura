@@ -16,28 +16,39 @@ import uuid
 from azure.cosmos import exceptions, CosmosClient, PartitionKey
 from dateutil.parser import parse       # used to create date/time objects from stringsec
 import time
+import argparse
 
 # Setup Logging
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
 logging.info('OURO-HISTORY logging enabled.')
 
+# Setup command line arguements
+parser = argparse.ArgumentParser(description="OURO-HISTORY:  Daily stock data ingestion.")
+parser.add_argument("--test", action="store_true", default=False, help="Script runs in test mode.  FALSE (Default) = update the entire universe of stock; TRUE = update a small subset of stocks to make testing quicker")
+cmdline = parser.parse_args()
+
 # Setup the API
 api = tradeapi.REST()
 logging.info('Trade API configured.')
+logging.info('Test mode is:  ' + str(cmdline.test))
 
-# Calculate universe of stocks
-assets = api.list_assets()
-slist = []
-for x in assets:
-    if x.exchange == 'NASDAQ' or x.exchange=='NYSE':
-        if x.tradable is True and x.status == 'active':
-            slist.append(x.symbol)
-            logging.debug('Adding ' + x.symbol + ' to the universe of stocks.')
+if not cmdline.test:
+    # Calculate universe of stocks
+    assets = api.list_assets()
+    slist = []
+    for x in assets:
+        if x.exchange == 'NASDAQ' or x.exchange=='NYSE':
+            if x.tradable is True and x.status == 'active':
+                slist.append(x.symbol)
+                logging.debug('Adding ' + x.symbol + ' to the universe of stocks.')
+            else:
+                logging.debug('Skipping ' + x.symbol + ' because it is not tradable or active.')
         else:
-            logging.debug('Skipping ' + x.symbol + ' because it is not tradable or active.')
-    else:
-        logging.debug('Skipping ' + x.symbol + ' because it is not in NYSE or NASDAQ.')
-logging.info('Universe of stocks created; ' + str(len(slist)) + ' stocks in the list.')
+            logging.debug('Skipping ' + x.symbol + ' because it is not in NYSE or NASDAQ.')
+    logging.info('Universe of stocks created; ' + str(len(slist)) + ' stocks in the list.')
+else:
+    # Test with a small diverse set of stocks
+    slist = ['CVS', 'DRI', 'EVR','FDEF', 'IBM', 'MPW', 'PPBI', 'PPL', 'PXD', 'QIWI', 'RL', 'TX', 'VZ']
 
 # Initialize the Cosmos client
 endpoint = os.environ.get("OURO_DOCUMENTS_ENDPOINT", "SET OURO_DOCUMENTS_ENDPOINT IN ENVIRONMENT")
