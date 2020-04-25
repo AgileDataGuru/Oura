@@ -56,10 +56,10 @@ for stock in stocklist:
             query=query,
             enable_cross_partition_query=True
         ))
-        logging.debug('Retrieve daily data.')
+        logging.debug('Retrieve daily data for ' + stock)
         df = pd.DataFrame(data)
     except:
-        logging.debug('No daily date available.')
+        logging.debug('No daily date available for ' + stock)
 
     if not df.empty:
         # calculate the technical indicators if there is data to do so
@@ -77,3 +77,4 @@ for stock in stocklist:
         df['BBANDS14-2'] = ta.BBANDS(df['adjclose'], timeperiod=5, nbdevup=2, nbdevdn=2, matype=0)[2]
         df['AD14'] = ta.AD(df['high'], df['low'], df['adjclose'], df['volume'])
         df['OBV14'] = ta.OBV(df['adjclose'], df['volume'])
+

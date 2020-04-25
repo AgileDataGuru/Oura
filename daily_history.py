@@ -10,6 +10,7 @@ import csv                              # for reading static data
 import yfinance as yf                   # for stock list
 import alpaca_trade_api as tradeapi     # required for trading
 import datetime                         # used for stock timestamps
+from datetime import timedelta
 import json
 import uuid
 from azure.cosmos import exceptions, CosmosClient, PartitionKey
@@ -52,7 +53,8 @@ container = database.create_container_if_not_exists(
 logging.info ('Azure-Cosmos client initialized; connected to ' + endpoint)
 
 # configure common dates
-today = datetime.date.today()
+today = datetime.datetime.utcnow()
+today_str = today.strftime('%Y-%m-%d')
 yesterday = today - datetime.timedelta(days=1)
 earliest = today - datetime.timedelta(days=60)
 
@@ -65,33 +67,36 @@ for x in slist:
     counter = counter + 1
 
     # check the throttle; limit this process to 100RU/sec
-    throttle = ((datetime.datetime.now()-procstart).total_seconds())*100
+    throttle = ((datetime.datetime.now()-procstart).total_seconds())*400
     if rucounter > throttle:
-        logging.debug('Sleeping ' + str((rucounter - throttle) / 100) + ' seconds to throttle the process.')
-        time.sleep((rucounter-throttle)/100)
+        logging.debug('Sleeping ' + str((rucounter - throttle) / 400) + ' seconds to throttle the process.')
+        time.sleep((rucounter-throttle)/400)
 
     # Get the last time daily data for this stock was cached
     # Note: 4.24 RU
     query = "select value max(d.tradedate) from daily d where d.ticker = '" + x + "'"
     rucounter = rucounter + 1
+    startdate = today
     try:
         dt = list(container.query_items(
             query=query,
             enable_cross_partition_query=False
         ))
-        startdate_str = str(parse(dt[0]).strftime('%Y-%m-%d'))
+        startdate = parse(dt[0]) + timedelta(days=1)
+        startdate_str = startdate.strftime('%Y-%m-%d')
         logging.debug ('Last daily date for ' + x + ' is ' + startdate_str)
     except:
-        startdate_str = str(earliest)
-        logging.debug('No date found for ' + x + '; getting data since ' + startdate_str)
+        startdate = earliest
+        startdate_str = str(earliest.strftime('%Y-%m-%d'))
+        logging.debug('No date found for ' + x + '; getting data between ' + startdate_str + ' and ' + today_str)
 
     # If the last date was in the past, get new data; otherwise, skip it
-    if startdate_str != str(yesterday) and startdate_str != str(today):
+    if startdate < today:
 
-        data = yf.download(x, start=startdate_str, end=yesterday, interval='1d', prepost='False', group_by='ticker')
+        data = yf.download(x, start=startdate_str, end=today_str, interval='1d', prepost='False', group_by='ticker')
         try:
             logging.info(
-                '(' + str(counter) + ' of ' + str(len(slist)) + ') Getting data for ' + x + ' since ' + startdate_str)
+                '(' + str(counter) + ' of ' + str(len(slist)) + ') ' + x + ':  Getting data between ' + startdate_str + ' and ' + today_str)
             jsondata = json.loads(data.to_json(orient='index'))
         except:
             jsondata = {}
@@ -99,12 +104,12 @@ for x in slist:
 
         # Transform the json into a format easier to analyze and write it to Cosmos DB
         for r in jsondata:
-            tradedate = datetime.datetime.fromtimestamp(int(r) / 1e3)
+            tradedate = datetime.datetime.utcfromtimestamp(int(r) / 1e3).strftime('%Y-%m-%d')
             id = uuid.uuid1(uuid.getnode())
             row = {
                 'id': str(id),
                 'ticker': x,
-                'tradedate': tradedate.strftime('%Y-%m-%d'),
+                'tradedate': tradedate,
                 'open': jsondata[r]['Open'],
                 'high': jsondata[r]['High'],
                 'low': jsondata[r]['Low'],
@@ -117,9 +122,9 @@ for x in slist:
             rucounter = rucounter + 1
             try:
                 container.create_item(body=row)
-                logging.debug('Created document for ' + x + ' on ' + tradedate.strftime('%Y-%m-%d'))
+                logging.debug('Created document for ' + x + ' on ' + tradedate)
             except:
-                logging.error('Could not create document for ' + x + ' on ' + tradedate.strftime('%Y-%m-%d'))
+                logging.error('Could not create document for ' + x + ' on ' + tradedate)
         logging.info(
             '(' + str(counter) + ' of ' + str(len(slist)) + ') Finished processing ' + x)
 
