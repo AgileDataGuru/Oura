@@ -16,6 +16,7 @@ import pandas as pd                     # in-memory database capabilities
 import talib as ta                      # lib to calcualted technical indicators
 import alpaca_trade_api as tradeapi     # required for interaction with Alpaca
 from pandas.io.json import json_normalize
+import ouro_lib as ol
 
 # Setup Logging
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
@@ -24,31 +25,12 @@ logging.info('OURO-PATHFINDER logging enabled.')
 # Initialize the Alpaca API
 alpaca = tradeapi.REST()
 
-# Initialize the Cosmos client
-endpoint = os.environ.get("OURO_DOCUMENTS_ENDPOINT", "SET OURO_DOCUMENTS_ENDPOINT IN ENVIRONMENT")
-key = os.environ.get("OURO_DOCUMENTS_KEY", "SET OURO_DOCUMENTS_KEY IN ENVIRONMENT")
-client = CosmosClient(endpoint, key)
-database_name = 'stockdata'
-database = client.create_database_if_not_exists(id=database_name)
-
 # Connect to the daily_indicators container
-indicators = database.create_container_if_not_exists(
-    id="daily_indicators",
-    partition_key=PartitionKey(path="/ticker"),
-    offer_throughput=400
-)
-logging.info ('Azure-Cosmos client initialized; connected to ' + endpoint)
+indicators = ol.cosdb('stockdata', 'daily_indicators', '/ticker')
 
 # get list of stocks in the universe; find stocks potentially worth trading
 query = "select * from (select i.ticker, i.adjclose, i.RSIVOTE + i.MACDVOTE + i.AROONVOTE + i.CCIVOTE as Vote from daily_indicators i where i.tradedate = '2020-04-29') x where x.Vote > 0"
-try:
-    stocksraw = list(indicators.query_items(
-        query=query,
-        enable_cross_partition_query=True
-    ))
-    logging.debug('Retrieve daily data.')
-except:
-    logging.debug('No daily date available.')
+stocksraw = ol.qrycosdb(indicators, query)
 
 # Put the stock list into a dataframe ordered by their buy vote
 # A higher vote number, the more concensus; the lower, the less concensus
