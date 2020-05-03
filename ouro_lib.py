@@ -15,7 +15,7 @@ def cosdb (db, ctr, prtn):
     # Connect to a CosmosDB database and container
 
     # Setup Logging
-    logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
+    logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
 
     # Initialize the Cosmos client
     endpoint = os.environ.get("OURO_DOCUMENTS_ENDPOINT", "SET OURO_DOCUMENTS_ENDPOINT IN ENVIRONMENT")
@@ -177,6 +177,21 @@ def calcind(df):
         df['ADOSCVOTE'] = 0
         df.loc[df['ADOSC'] > 0, 'ADOSCVOTE'] = 1
         df.loc[df['ADOSC'] < 0, 'ADOSCVOTE'] = -1
+
+        for x in df.index:
+            #print (df.loc[x, 'STRATEGY_ID'][0])
+            a = chr(66 + df.loc[x, 'AROONVOTE'])
+            b = chr(66 + df.loc[x, 'BOPVOTE'])
+            c = chr(66 + df.loc[x, 'CCIVOTE'])
+            d = chr(66 + df.loc[x, 'CMOVOTE'])
+            e = chr(66 + df.loc[x, 'MACDVOTE'])
+            f = chr(66 + df.loc[x, 'PPOVOTE'])
+            g = chr(66 + df.loc[x, 'RSIVOTE'])
+            h = chr(66 + df.loc[x, 'STOCHVOTE'])
+            i = chr(66 + df.loc[x, 'STOCHRSIVOTE'])
+            j = chr(66 + df.loc[x, 'TRIXVOTE'])
+            k = chr(66 + df.loc[x, 'ADOSCVOTE'])
+            df.loc[x, 'STRATEGY_ID'] = a + b + c + d + e + f + g + h +i + j + k
 
         return df
 

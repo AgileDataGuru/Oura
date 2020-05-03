@@ -19,7 +19,7 @@ from pandas.io.json import json_normalize
 import ouro_lib as ol
 
 # Setup Logging
-logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
+logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
 logging.info('OURO-PATHFINDER logging enabled.')
 
 # Initialize the Alpaca API
