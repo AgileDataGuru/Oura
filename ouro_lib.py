@@ -179,7 +179,9 @@ def calcind(df):
         df.loc[df['ADOSC'] < 0, 'ADOSCVOTE'] = -1
 
         # Drop rows where there isn't enough information to vote
-        df.dropna(subset=['AROONUP', 'AROONDN', 'BOP', 'CCI14', 'CMO14', 'MACDHIST', 'PPO12', 'RSI14', 'STOCHK', 'STOCHD', 'STOCHRSIK', 'STOCHRSID', 'TRIX30', 'ADOSC'], inplace=True)
+        # Note 1:  TRIX30 should be cleaned up, but the period is too long and it removes too much data.
+        # Note 2:  MACD has a long period as well and will essentially eliminate trading before 10:00 AM
+        df.dropna(subset=['AROONUP', 'AROONDN', 'BOP', 'CCI14', 'CMO14', 'MACDHIST', 'PPO12', 'RSI14', 'STOCHK', 'STOCHD', 'STOCHRSIK', 'STOCHRSID', 'ADOSC'], inplace=True)
 
         for x in df.index:
             #print (df.loc[x, 'STRATEGY_ID'][0])
