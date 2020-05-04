@@ -77,6 +77,7 @@ while startdate <= enddate:
         # Get the last 30 minutes of data for all the stocks in the list
         barset = alpaca.get_barset(stock, timeframe='1Min', limit=1000, start=pd.Timestamp(s, tz='America/New_York').isoformat(), end=pd.Timestamp(e, tz='America/New_York').isoformat())
         df = {}
+        raw = {}
 
         # Convert barset to usable dataframe
         for stock in barset.keys():
@@ -84,26 +85,31 @@ while startdate <= enddate:
             bars = barset[stock]
 
             logging.debug('Converting bar data for ' + stock)
-            data = {'t': [bar.t for bar in bars],
+            data = {'id': str(uuid.uuid1(uuid.getnode())),
+                    'ticker': [stock for bar in bars],
+                    't': [bar.t for bar in bars],
                     'h': [bar.h for bar in bars],
                     'l': [bar.l for bar in bars],
                     'o': [bar.o for bar in bars],
                     'c': [bar.c for bar in bars],
                     'v': [bar.v for bar in bars]}
 
+            # copy the raw data befoire doing anything else to it
+            raw[stock] = pd.DataFrame(data)
+
+            # Calculate technical indicators
             logging.debug('Calculating technical indicators ' + stock)
             df[stock] = ol.calcind(pd.DataFrame(data))
+
+            # Calculate training parameters
             if isinstance(df[stock], pd.DataFrame) :
                 if not df[stock].empty:
-                    df[stock].loc[:, 'ticker'] = stock
-
                     # find the highest and lowest price for this stock in this day
                     highidx = -1
                     lowidx = -1
                     high = -1
                     low = 99999999
                     for x in df[stock].index:
-                        df[stock].loc[x, 'id'] = str(uuid.uuid1(uuid.getnode()))
                         if df[stock].loc[x, 'h'] > high:
                             high = df[stock].loc[x, 'h']
                             highidx = x
@@ -111,6 +117,7 @@ while startdate <= enddate:
                             low = df[stock].loc[x, 'l']
                             lowidx = x
 
+                    # set the action for training
                     df[stock].loc[:, 'ACTION'] = 'None'
                     if lowidx < highidx:
                         # These are already in time series order; no need to parse the time
@@ -131,17 +138,20 @@ while startdate <= enddate:
                     # Write it to a CSV file; I'll figure out the best place to host it later
                     if firsttime == 1:
                         try:
-                            df[stock].to_csv('D:\OneDrive\Dev\SQL\ouro-training-data.csv', mode='a', header=False)
-                        except:
-                            logging.error('Unable to write data for ' + stock + ' on ' + startdate)
+                            df[stock].to_csv('D:\OneDrive\Dev\SQL\ouro-training-data.csv', mode='a', header=False, index=False)
+                            raw[stock].to_csv('D:\OneDrive\Dev\SQL\ouro-raw-training-data.csv', mode='a', header=False, index=False)
+                        except Exception as ex:
+                            logging.error('Unable to write data for ' + stock + ' on ' + s)
+                            print(ex)
                     else:
                         try:
-                            df[stock].to_csv('D:\OneDrive\Dev\SQL\ouro-training-data.csv', mode='w', header=True)
+                            df[stock].to_csv('D:\OneDrive\Dev\SQL\ouro-training-data.csv', mode='w', header=True, index=False)
+                            raw[stock].to_csv('D:\OneDrive\Dev\SQL\ouro-raw-training-data.csv', mode='a', header=True, index=False)
                             firsttime = 1
-                        except:
-                            logging.error('Unable to write data for ' + stock + ' on ' + startdate)
+                        except Exception as ex:
+                            logging.error('Unable to write data for ' + stock + ' on ' + s)
+                            print(ex)
 
-    logging.info('Completed training data for ' + stock)
     startdate = startdate + timedelta(days=1)
 
 
