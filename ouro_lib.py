@@ -178,6 +178,9 @@ def calcind(df):
         df.loc[df['ADOSC'] > 0, 'ADOSCVOTE'] = 1
         df.loc[df['ADOSC'] < 0, 'ADOSCVOTE'] = -1
 
+        # Drop rows where there isn't enough information to vote
+        df.dropna(subset=['AROONUP', 'AROONDN', 'BOP', 'CCI14', 'CMO14', 'MACDHIST', 'PPO12', 'RSI14', 'STOCHK', 'STOCHD', 'STOCHRSIK', 'STOCHRSID', 'TRIX30', 'ADOSC'], inplace=True)
+
         for x in df.index:
             #print (df.loc[x, 'STRATEGY_ID'][0])
             a = chr(66 + df.loc[x, 'AROONVOTE'])
