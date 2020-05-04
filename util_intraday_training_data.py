@@ -22,7 +22,6 @@ from pandas.io.json import json_normalize
 import ouro_lib as ol
 import argparse
 
-
 # Setup Logging
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
 logging.info('UTIL_INTRADAY_TRAINING_DATA logging enabled.')
@@ -32,6 +31,9 @@ parser = argparse.ArgumentParser(description="UTIL_INTRADAY_TRAINING_DATA:  Inge
 parser.add_argument("--test", action="store_true", default=False, help="Script runs in test mode.  FALSE (Default) = update the entire universe of stock; TRUE = update a small subset of stocks to make testing quicker")
 parser.add_argument("--start", help="Specify the first date that intraday data is gathered from.  The default is the last date/time stored in the training data database for that stock.")
 cmdline = parser.parse_args()
+
+# Connect to the daily_indicators container
+dbconn = ol.cosdb('stockdata', 'training_data', '/ticker')
 
 try:
     startdate = parse(cmdline.start)
@@ -62,11 +64,14 @@ else:
 
 logging.info('Universe of stocks created; ' + str(len(slist)) + ' stocks in the list.')
 
+firsttime = 0
+
 while startdate <= enddate:
+    # set the start/end dates for this trade date
     s = str(startdate.strftime("%Y-%m-%d")) + ' 09:30'
     e = str(startdate.strftime("%Y-%m-%d")) + ' 16:30'
 
-    print(s, e)
+    logging.info ('Getting training data on ' + s)
 
     for stock in slist:
         # Get the last 30 minutes of data for all the stocks in the list
@@ -75,17 +80,69 @@ while startdate <= enddate:
 
         # Convert barset to usable dataframe
         for stock in barset.keys():
+            logging.info('Starting training data for ' + stock)
             bars = barset[stock]
+
+            logging.debug('Converting bar data for ' + stock)
             data = {'t': [bar.t for bar in bars],
                     'h': [bar.h for bar in bars],
                     'l': [bar.l for bar in bars],
                     'o': [bar.o for bar in bars],
                     'c': [bar.c for bar in bars],
                     'v': [bar.v for bar in bars]}
-            df[stock] = ol.calcind(pd.DataFrame(data))
-            print(df[stock])
 
-startdate = startdate + timedelta(days=1)
+            logging.debug('Calculating technical indicators ' + stock)
+            df[stock] = ol.calcind(pd.DataFrame(data))
+            if isinstance(df[stock], pd.DataFrame) :
+                if not df[stock].empty:
+                    df[stock].loc[:, 'ticker'] = stock
+
+                    # find the highest and lowest price for this stock in this day
+                    highidx = -1
+                    lowidx = -1
+                    high = -1
+                    low = 99999999
+                    for x in df[stock].index:
+                        df[stock].loc[x, 'id'] = str(uuid.uuid1(uuid.getnode()))
+                        if df[stock].loc[x, 'h'] > high:
+                            high = df[stock].loc[x, 'h']
+                            highidx = x
+                        if df[stock].loc[x, 'l'] < low:
+                            low = df[stock].loc[x, 'l']
+                            lowidx = x
+
+                    df[stock].loc[:, 'ACTION'] = 'None'
+                    if lowidx < highidx:
+                        # These are already in time series order; no need to parse the time
+                        df[stock].loc[lowidx, 'ACTION'] = 'Buy'
+                        df[stock].loc[highidx, 'ACTION'] = 'Sell'
+
+                    # Calculate the best profit margin for the day
+                    df[stock].loc[:, 'DAYMARGIN'] = (high-low)/low
+
+                    # for x in json.loads(df[stock].to_json(orient='records')):
+                    #     # write the data
+                    #     try:
+                    #         dbconn.create_item(body=x)
+                    #     except Exception as ex:
+                    #         logging.debug ('Problem creating document for ' + stock)
+                    #         print(ex)
+
+                    # Write it to a CSV file; I'll figure out the best place to host it later
+                    if firsttime == 1:
+                        try:
+                            df[stock].to_csv('D:\OneDrive\Dev\SQL\ouro-training-data.csv', mode='a', header=False)
+                        except:
+                            logging.error('Unable to write data for ' + stock + ' on ' + startdate)
+                    else:
+                        try:
+                            df[stock].to_csv('D:\OneDrive\Dev\SQL\ouro-training-data.csv', mode='w', header=True)
+                            firsttime = 1
+                        except:
+                            logging.error('Unable to write data for ' + stock + ' on ' + startdate)
+
+    logging.info('Completed training data for ' + stock)
+    startdate = startdate + timedelta(days=1)
 
 
 
