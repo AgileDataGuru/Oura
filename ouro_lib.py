@@ -10,6 +10,11 @@ import json                             # for manipulating array data
 import pandas as pd                     # in-memory database capabilities
 import talib as ta                      # lib to calcualted technical indicators
 from azure.cosmos import exceptions, CosmosClient, PartitionKey
+import alpaca_trade_api as tradeapi     # required for interaction with Alpaca
+from datetime import datetime
+from datetime import timedelta
+import time
+from dateutil.parser import parse
 
 def cosdb (db, ctr, prtn):
     # Connect to a CosmosDB database and container
@@ -117,8 +122,8 @@ def calcind(df):
 
         # BOP Signal
         df['BOPVOTE'] = 0
-        df.loc[df['BOP'] >0, 'BOPVOTE'] = 1
-        df.loc[df['BOP'] <0, 'BOPVOTE'] = -1
+        df.loc[(df['BOP'] >0), 'BOPVOTE'] = 1
+        df.loc[(df['BOP'] <0), 'BOPVOTE'] = -1
 
         # CCI Vote
         df['CCIVOTE'] = 0
@@ -132,9 +137,9 @@ def calcind(df):
 
         # MACD Vote; based on when the histogram crosses the zero line
         df['MACDVOTE'] = 0
-        df.loc[(df['MACDHIST'] > 0) & (df['MACDHIST'].shift(periods=1) <= 0), 'MACDVOTE'] = 1
-        df.loc[(df['MACDHIST'] <= 0) & (df['MACDHIST'].shift(periods=1) > 0), 'MACDVOTE'] = -1
-        df.loc[df['MACDHIST'] == 0, 'CMOVOTE'] = 0
+        df.loc[(df['MACDHIST'] > 0) & (df['MACDHIST'].shift(periods=-1) < df['MACDHIST']), 'MACDVOTE'] = 1
+        df.loc[(df['MACDHIST'] < 0) & (df['MACDHIST'].shift(periods=-1) > df['MACDHIST']), 'MACDVOTE'] = -1
+        df.loc[df['MACDHIST'] == 0, 'MACDVOTE'] = 0
 
         # MFI Votes
         # Skipping interpretting MFI because it correlates to the direction of price
@@ -200,8 +205,67 @@ def calcind(df):
 
         return df
 
+def InitSignal(tickers, families):
+    # initialize a matrix of tickers x signal families
+    sigarray = {}
+    for t in tickers:
+        sigarray[t] = {f:0 for f in families}
+    return sigarray
 
+def IsOpen():
+    # check if the market is open
+    alpaca = tradeapi.REST()
+    clock = alpaca.get_clock()
+    return clock.is_open
 
+def IsEOD():
+    # check if we're at the end of the day
+    alpaca = tradeapi.REST()
+    clock = alpaca.get_clock()
+    delta = clock.next_close - clock.timestamp
+    if int(delta.total_seconds()/60) <= 60:
+        return True
+    else:
+        return False
 
+def roundTime(dt=None):
+    # round the seconds off the time so we can time things to the beginning of the minute
+    if dt == None : dt = datetime.now()
+    format_str = '%Y-%m-%d %H:%M'
+    return datetime.strptime(datetime.strftime(dt, format_str), format_str)
 
+def WaitForMinute():
+    # Wait until the beginning of the next minute.
+    waituntil = roundTime() + timedelta(minutes=1)
+    waittime = waituntil - datetime.now()
+    logging.debug ('Waiting for ' + str(waittime.seconds) + ' seconds for before checking the next trade.')
+    time.sleep(waittime.seconds + 1) # Adding one second to eliminate ms variances
 
+def GetAccount():
+    # Get Alpaca account details
+    # Note:  'buying_power' loans / credit are against the trading plan; only use cash
+    data = {}
+    alpaca = tradeapi.REST()
+    account = alpaca.get_account()
+    return account
+
+def GetOrders(status='open', startdate=None):
+    # get orders of the defined type
+    alpaca = tradeapi.REST()
+    if startdate != None:
+        today_str = startdate
+    else:
+        today_str = datetime.utcnow().strftime('%Y-%m-%d')
+    return alpaca.list_orders(status, limit=500, after=today_str)
+
+def GetPositions():
+    # get orders of the defined type
+    alpaca = tradeapi.REST()
+    today_str = datetime.utcnow().strftime('%Y-%m-%d')
+    return alpaca.list_positions()
+
+def GetOrderCount():
+    # Get the number of position waiting to be sold and pending orders
+    heldstocks = len(GetPositions())
+    #pendingstocks = len(GetOrders()) # I dont' think this will occur
+    return int(int(heldstocks))

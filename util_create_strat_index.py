@@ -16,6 +16,7 @@ import time
 import pandas as pd
 import talib as ta
 import ouro_lib as ol
+import csv
 
 # AROON Oscillator
 # BOP Signal
@@ -81,23 +82,29 @@ for code in codes:
             sname = sname + '-' + strats[x]
     stratDict[code] = {'family':family, 'name':sname}
 
+print(stratDict)
 
 
 # Connect to the daily_indicators container
 dbconn = ol.cosdb('stockdata', 'strategies', '/family')
 
 # loop through the stratgies and write them to the database
-for x in stratDict:
-    row = {
-        'id':x,
-        'family':stratDict[x]['family'],
-        'name':stratDict[x]['name']
-    }
-    try:
-        dbconn.create_item(body=row)
-        logging.debug('Created document for ' + x )
-    except:
-        logging.error('Could not create document for ' + x)
+col = ['id', 'family', 'name']
+with open('D:\OneDrive\Dev\SQL\strategy_names.csv', 'w', encoding='utf-8') as f:
+    writer = csv.DictWriter(f, fieldnames=col)
+    writer.writeheader()
+    for x in stratDict:
+        row = {
+            'id':x,
+            'family':stratDict[x]['family'],
+            'name':stratDict[x]['name']
+        }
+        writer.writerow(row)
+        try:
+            dbconn.create_item(body=row)
+            logging.debug('Created document for ' + x )
+        except:
+            logging.error('Could not create document for ' + x)
 
 
 

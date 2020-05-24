@@ -17,10 +17,33 @@ import talib as ta                      # lib to calcualted technical indicators
 import alpaca_trade_api as tradeapi     # required for interaction with Alpaca
 from pandas.io.json import json_normalize
 import ouro_lib as ol
+from progress.bar import Bar
+import threading
+import math
+import csv
+import argparse
 
 # Setup Logging
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
 logging.info('OURO-PATHFINDER logging enabled.')
+
+# setup command line
+parser = argparse.ArgumentParser(description="OURO-HISTORY:  Daily stock data ingestion.")
+parser.add_argument("--test", action="store_true", default=False, help="Script runs in test mode.  FALSE (Default) = ignore if the market is closed; TRUE = only run while the market is open")
+cmdline = parser.parse_args()
+
+# Get Quorum path from environment
+quorumroot = os.environ.get("OURO_QUORUM", "C:\\TEMP")
+actionpath = quorumroot + '\\broker-actions.json'
+quorumpath = quorumroot + '\\pathfinder-status.csv'
+
+# initialize files
+with open (quorumpath, 'w', newline='\n', encoding='utf-8') as outfile:
+    outfile.write('')
+with open (actionpath, 'w', newline='\n', encoding='utf-8') as outfile:
+    outfile.write('{}')
+
+logging.info('Quorum path set to ' + quorumpath)
 
 # Initialize the Alpaca API
 alpaca = tradeapi.REST()
@@ -28,56 +51,208 @@ alpaca = tradeapi.REST()
 # Connect to the daily_indicators container
 indicators = ol.cosdb('stockdata', 'daily_indicators', '/ticker')
 
+# Read the buy and sell strategies
+buy = pd.read_csv('D:\\OneDrive\\Dev\\Python\\Oura\\buy_strategies.csv')
+buylist = buy['strategy_id'].values.tolist()
+buyfam = buy['Family'].unique()
+
+# Initialize the actions set
+actions = {}
+
+# I don't think I actually care about this because I'm selling based on a risk management profile.
+# sell = pd.read_csv('D:\\OneDrive\\Dev\\Python\\Oura\\sell_strategies.csv')
+# selllist = sell['strategy_id'].values.tolist()
+# sellfam = sell['Family'].unique()
+
+# build a simple index between the strategy_id and the family
+famref = {}
+for x in buy['strategy_id'].keys():
+    famref[buy.at[x, 'strategy_id']] = buy.at[x, 'Family']
+
+# build simple index between family and average signals
+famavg = {}
+for x in buy['Family'].keys():
+    famavg[buy.at[x, 'Family']] = buy.at[x, 'AvgBuyWarning']
+
+# Create a buy string
+f = 0
+buystr = ''
+for x in buy['strategy_id']:
+    if f != 0:
+        buystr = buystr + ", "
+    buystr = buystr + "'" + x + "'"
+    f = 1
+
+# Get the last date in the daily table
+ddate = ol.qrycosdb(indicators, 'SELECT value max(d.tradedate) from daily d')[0]
+
 # get list of stocks in the universe; find stocks potentially worth trading
-query = "select * from (select i.ticker, i.adjclose, i.RSIVOTE + i.MACDVOTE + i.AROONVOTE + i.CCIVOTE as Vote from daily_indicators i where i.tradedate = '2020-04-29') x where x.Vote > 0"
-stocksraw = ol.qrycosdb(indicators, query)
+# NOTE:  With $1000 starting capital, stocks that cost over $100 are over my money management budget
+query = "select distinct d.ticker, d.STRATEGY_ID, d.tradedate, d.v, d.h-d.l Change from daily_indicators d where d.l < 100 and d.o > 5 and d.l > 5 and d.tradedate = '" + ddate + "' and d.STRATEGY_ID in (" + buystr + ") order by d.v desc"
+tmpraw = ol.qrycosdb(indicators, query)
+logging.info ('Found ' + str(len(tmpraw)) + ' worth monitoring today.')
 
 # Put the stock list into a dataframe ordered by their buy vote
 # A higher vote number, the more concensus; the lower, the less concensus
-stocklist = pd.DataFrame(stocksraw).sort_values(by=['Vote'], ascending=False)
+stockraw = pd.DataFrame(tmpraw)  #.sort_values(by=['Vote'], ascending=False)
+if len(stockraw) > 750:
+    stocklist = stockraw.nlargest(750, 'v')  # This is about all I can deal with
+else:
+    stocklist = stockraw
 
-# Get the last 30 minutes of data for all the stocks in the list
-barset = alpaca.get_barset(stocklist['ticker'], '1Min', limit=30)
-df = {}
+# Free up memory
+tmpraw = None
+stockraw = None
 
-# Convert barset to usable dataframe
-for stock in barset.keys():
-    bars = barset[stock]
-    data = {'t': [bar.t for bar in bars],
-            'h': [bar.h for bar in bars],
-            'l': [bar.l for bar in bars],
-            'o': [bar.o for bar in bars],
-            'c': [bar.c for bar in bars],
-            'v': [bar.v for bar in bars]}
-    df[stock] = ol.calcind(pd.DataFrame(data))
-    print(df[stock])
+# setup counters for chunking stocks into sets
+set = 0
+stockctr = 0
+setctr = 0
+stockset = {}
+sl = []
+
+# Get a list of closing prices from yesterday
+today = datetime.datetime.utcnow()
+yesterday = today - datetime.timedelta(days=1)
+ystr = yesterday.strftime('%Y-%m-%d')
+query = "select d.ticker, d.c from daily d where d.tradedate = '" + ystr + "' order by d.tradedate desc"
+closingraw  = ol.qrycosdb(indicators, query)
+closing = {}
+for x in closingraw:
+    closing.update({x.get('ticker'):x.get('c')})
+
+# Chunk stocks into groups of 200, the limit that can be requested at once
+while stockctr < len(stocklist['ticker']):
+    try:
+        sl.append(stocklist.loc[stockctr, 'ticker'])
+    except:
+        logging.debug('Problem with stocklist index ' + str(stockctr))
+
+    stockctr = stockctr + 1
+    setctr = setctr + 1
+    if setctr == 200:
+        # Save the set and rest the counter for the next one
+        stockset.update({set : sl})
+        set = set + 1
+        setctr = 0
+        sl = []
+
+# Add the last group of stocks to the sets
+stockset.update({set : sl})
+
+# Wait for the market to open unless it's a test
+while not ol.IsOpen() and not cmdline.test:
+    ol.WaitForMinute()
+
+# Initialize MarketOpen
+marketopen = ol.IsOpen()
+
+# initialize the counting array
+sgnl = ol.InitSignal(stocklist['ticker'], buyfam)
+
+# set the first time flag
+firsttime = True
+
+# Main processing loop to look for stocks to buy
+while (marketopen and not ol.IsEOD) or cmdline.test is True:
+    # reset the path finder status
+    pf = {}
+
+    # Check if the market is open
+    marketopen = ol.IsOpen()
+
+    # update screen
+    print (datetime.datetime.now())
+    print('The market is {}'.format('open.' if marketopen else 'closed.'))
+
+    # Get the last 42 (TRIX + 12 extra minutes) minutes of data for all the stocks in the list
+    logging.info('Getting stock sets.')
+    barset = {}
+    for x in stockset:
+        logging.debug('Getting set ' + str(x))
+        barset[x] = alpaca.get_barset(stockset[x], '1Min', limit=42)
+
+    # process each stock
+    df = {}
+    for x in stockset:
+        prgbar = Bar('  Set ' + str(x), max=len(barset[x]))
+        # process each stock in the barset
+        for stock in barset[x].keys():
+            # convert bars from Alpaca into something more usable
+            bars = barset[x][stock]
+            logging.debug('Converting bar data for ' + stock)
+            data = {'ticker': [stock for bar in bars],
+                    't': [bar.t for bar in bars],
+                    'h': [bar.h for bar in bars],
+                    'l': [bar.l for bar in bars],
+                    'o': [bar.o for bar in bars],
+                    'c': [bar.c for bar in bars],
+                    'v': [bar.v for bar in bars]}
+
+            # Calculate technical indicators
+            logging.debug('Calculating technical indicators ' + stock)
+            df[stock] = ol.calcind(pd.DataFrame(data))
+
+            # Check if there is a significant difference between yesterday's open and today's
+            opendiff = ( df[stock].at[df[stock].index[-1], 'o']-closing[stock])/closing[stock]
+
+            skip = False
+            if firsttime and opendiff > .02: # guess threshold
+                skip = True
+
+            # Check if the last strategy is in the buy strategy list
+            try:
+                tmpstrat = df[stock].at[df[stock].index[-1], 'STRATEGY_ID']
+                print(stock, df[stock].at[df[stock].index[-1], 'o'], closing[stock], opendiff, (tmpstrat in buylist and not skip))
+                # Add to the number of times this family has been seen for this stock
+                if tmpstrat in buylist and not skip:
+                    tmpfam = famref.get(tmpstrat)
+                    v = sgnl[stock].get(tmpfam)
+                    v += 1
+                    sgnl[stock].update({tmpfam:v})
+
+                    # check if the value exceeds the average buy warning
+                    tavg = famavg.get(tmpfam)
+                    if not math.isnan(tavg):
+                        # print (stock, v > tavg, stock not in actions.keys(), df[stock].at[df[stock].index[-1], 'c'])
+                        if v > tavg and stock not in actions.keys():
+                            logging.debug('Buy signal triggered for ' + stock + ' with ' + str(v) + ' signals in ' + tmpfam)
+                            # record the buy trigger
+                            actions[stock] = {
+                                'triggertime': datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
+                                'strategyfamily': tmpfam,
+                                'strategies': sgnl[stock],
+                                'price': df[stock].at[df[stock].index[-1], 'c']
+                            }
+
+                        else:
+                            logging.debug('Buy signal ' + str(v) + ' less than the threshold ' + str(tavg) + ' for family ' + tmpfam)
+
+            except Exception as ex:
+                logging.debug ('Could not check signal for ' + stock)
+            prgbar.next()
+        prgbar.finish()
+
+    # update path finder status
+    curtime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    with open (quorumpath, 'w', newline='\n', encoding='utf-8') as outfile:
+        writer = csv.writer(outfile)
+        # write the header
+        writer.writerow(['datetime', 'signal', 'ticker', 'family', 'signals', 'threshold'])
+        for x in sgnl:
+            for y in sgnl[x]:
+                if sgnl[x].get(y) > 0:
+                    tavg = famavg.get(y)
+                    if math.isnan(tavg):
+                        tavg = 0
+                    writer.writerow([curtime, 'buy', x, y, sgnl[x].get(y), tavg])
+
+    # write actions
+    with open (actionpath, 'w', newline='\n', encoding='utf-8') as outfile:
+        actionstr = json.dumps(actions, indent=4)
+        outfile.write(actionstr)
+
+    # wait until the next minute before checking again
+    ol.WaitForMinute()
 
 
-#
-#
-#         # Get the max date that indicator data exists for this stock
-#         # Note: 4.88 RU per 100 rows
-#         query = "SELECT VALUE max(d.tradedate) from daily d where d.ticker = '" + stock + "'"
-#         dt = parse('1971-01-01')
-#         dt_str = dt.strftime('%Y-%m-%d')
-#         try:
-#             dt_list = list(indicators.query_items(
-#                 query=query,
-#                 enable_cross_partition_query=True
-#             ))
-#             logging.debug('Last indicator seen for ' + stock + ' on ' + dt_list[0])
-#             dt = parse(dt_list[0])
-#             dt_str = dt.strftime('%Y-%m-%d')
-#         except:
-#             logging.debug('No indicators found for ' + stock + ', creating them from scratch.')
-#         rc=0
-#         for x in json.loads(df.to_json(orient='records')):
-#             if parse(x['tradedate']) > dt:
-#                 # write the data
-#                 try:
-#                     indicators.create_item(body=x)
-#                     logging.debug('Created document for ' + x['ticker'] + ' on ' + x['tradedate'])
-#                     rc = rc + 1
-#                 except:
-#                     logging.error('Could not create document for ' + x['ticker'] + ' on ' + x['tradedate'])
-#         logging.info('Wrote ' + str(rc) + ' records for ' + stock)

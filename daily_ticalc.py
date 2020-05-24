@@ -55,5 +55,5 @@ for stock in stocklist:
                     logging.debug('Created document for ' + x['ticker'] + ' on ' + x['tradedate'])
                     rc = rc + 1
                 except:
-                    logging.error('Could not create document for ' + x['ticker'] + ' on ' + x['tradedate'])
+                    logging.debug('Could not create document for ' + x['ticker'] + ' on ' + x['tradedate'])
         logging.info('Wrote ' + str(rc) + ' records for ' + stock)

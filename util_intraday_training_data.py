@@ -21,6 +21,7 @@ import alpaca_trade_api as tradeapi     # required for interaction with Alpaca
 from pandas.io.json import json_normalize
 import ouro_lib as ol
 import argparse
+from progress.bar import Bar
 
 # Setup Logging
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
@@ -65,23 +66,38 @@ else:
 logging.info('Universe of stocks created; ' + str(len(slist)) + ' stocks in the list.')
 
 firsttime = 0
-
+reqctr = 0
 while startdate <= enddate:
     # set the start/end dates for this trade date
     s = str(startdate.strftime("%Y-%m-%d")) + ' 09:30'
     e = str(startdate.strftime("%Y-%m-%d")) + ' 16:30'
 
-    logging.info ('Getting training data on ' + s)
+    retry = 0
+    prgbar = Bar('  ' + startdate.strftime("%Y-%m-%d"), max=len(slist))
 
     for stock in slist:
-        # Get the last 30 minutes of data for all the stocks in the list
-        barset = alpaca.get_barset(stock, timeframe='1Min', limit=1000, start=pd.Timestamp(s, tz='America/New_York').isoformat(), end=pd.Timestamp(e, tz='America/New_York').isoformat())
+        # get the minute-by-minute stock data for the current stock
+        barset = None
+        while barset == None:
+            try:
+                barset = alpaca.get_barset(stock, timeframe='1Min', limit=1000, start=pd.Timestamp(s, tz='America/New_York').isoformat(), end=pd.Timestamp(e, tz='America/New_York').isoformat())
+                reqctr = reqctr + 1
+            except Exception as ex:
+                retry = retry + 1
+                logging.warning('Could not get barset data; retry #' + str(retry) + ' in 10 seconds')
+                print (ex)
+                time.sleep(10)
+
         df = {}
         raw = {}
 
+        # Pause 3 second every 20 stocks to avoid hitting the request limit on Alpaca
+        if (reqctr/20)==int(reqctr/20):
+            time.sleep(3)
+
         # Convert barset to usable dataframe
+        # Note:  There is typically only one stock in the barset, but I guess there could be more
         for stock in barset.keys():
-            logging.info('Starting training data for ' + stock)
             bars = barset[stock]
 
             logging.debug('Converting bar data for ' + stock)
@@ -151,7 +167,8 @@ while startdate <= enddate:
                         except Exception as ex:
                             logging.error('Unable to write data for ' + stock + ' on ' + s)
                             print(ex)
-
+        prgbar.next()
+    prgbar.finish()
     startdate = startdate + timedelta(days=1)
 
 
