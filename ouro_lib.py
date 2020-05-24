@@ -269,3 +269,10 @@ def GetOrderCount():
     heldstocks = len(GetPositions())
     #pendingstocks = len(GetOrders()) # I dont' think this will occur
     return int(int(heldstocks))
+
+def GetLastOpenMarket():
+    today = datetime.utcnow()
+    startdate = today - timedelta(days=14)
+    alpaca = tradeapi.REST()
+    cal = alpaca.get_calendar(start=startdate.strftime('%Y-%m-%d'), end=today.strftime('%Y-%m-%d'))
+    return cal[-1].date.strftime('%Y-%m-%d')

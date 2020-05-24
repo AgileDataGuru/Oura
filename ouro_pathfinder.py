@@ -124,7 +124,8 @@ sl = []
 # Get a list of closing prices from yesterday
 today = datetime.datetime.utcnow()
 yesterday = today - datetime.timedelta(days=1)
-ystr = yesterday.strftime('%Y-%m-%d')
+ystr = ol.GetLastOpenMarket()
+
 query = "select d.ticker, d.c from daily d where d.tradedate = '" + ystr + "' order by d.tradedate desc"
 closingraw  = ol.qrycosdb(indicators, query)
 closing = {}
@@ -218,7 +219,7 @@ while (marketopen and not ol.IsEOD) or cmdline.test is True:
             # Check if the last strategy is in the buy strategy list
             try:
                 tmpstrat = df[stock].at[df[stock].index[-1], 'STRATEGY_ID']
-                print(stock, df[stock].at[df[stock].index[-1], 'o'], closing[stock], opendiff, (tmpstrat in buylist and not skip))
+                #print(stock, df[stock].at[df[stock].index[-1], 'o'], closing[stock], opendiff, (tmpstrat in buylist and not skip))
                 # Add to the number of times this family has been seen for this stock
                 if tmpstrat in buylist and not skip:
                     tmpfam = famref.get(tmpstrat)
