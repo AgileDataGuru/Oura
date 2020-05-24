@@ -13,33 +13,49 @@ from progress.bar import Bar
 import datetime                         # used for stock timestamps
 import alpaca_trade_api as tradeapi     # required for interaction with Alpaca
 import csv
-
-
-print(-.5 > -.6)
-quit()
+import logging
 
 # Get Quorum path from environment
 quorumroot = os.environ.get("OURO_QUORUM", "C:\\TEMP")
 actionpath = quorumroot + '\\broker-actions.json'
 buyskippath = quorumroot + '\\broker-buyskip.json'
 statuspath = quorumroot + '\\broker-status.csv'
+logpath = quorumroot + '\\trader.log'
+
+# Setup Logging
+logging.basicConfig(
+    filename=logpath,
+    filemode='a',
+    format='%(asctime)s %(name)s %(levelname)s %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    level=os.environ.get("LOGLEVEL", "INFO"))
+
+logging.info('OURO-TRADER logging enabled.')
 
 # initialize files
-with open (statuspath, 'w', newline='\n', encoding='utf-8') as outfile:
-    outfile.write('')
-with open (buyskippath, 'w', newline='\n', encoding='utf-8') as outfile:
-    outfile.write('')
+try:
+    logging.debug('Initializing trader files.')
+    with open (statuspath, 'w', newline='\n', encoding='utf-8') as outfile:
+        outfile.write('')
+    with open (buyskippath, 'w', newline='\n', encoding='utf-8') as outfile:
+        outfile.write('')
+except Exception:
+    logging.error('Could not initialize files', exc_info=True)
+    quit()
 
 # setup command line
 parser = argparse.ArgumentParser(description="OURO-HISTORY:  Daily stock data ingestion.")
 parser.add_argument("--test", action="store_true", default=False, help="Script runs in test mode.  FALSE (Default) = ignore if the market is closed; TRUE = only run while the market is open")
 cmdline = parser.parse_args()
+logging.info('Command line arguement; test mode is ' + str(cmdline.test))
 
 # define time-in-force rule
 if cmdline.test:
     inforce = 'gtc' # I don't want orders to error-out when testing
+    logging.debug('Inforce set to GTC')
 else:
-    inforce = 'ioc' # when trading for real, I should use instant-or-cancel orders to avoid waiting
+    inforce = 'day' # when trading for real, I should use instant-or-cancel (IOC) orders to avoid waiting
+    logging.debug('Inforce set to DAY')
 
 # Initialize the Alpaca API
 alpaca = tradeapi.REST()
@@ -49,12 +65,17 @@ strategies = pd.read_csv('D:\\OneDrive\\Dev\\Python\\Oura\\buy_strategies.csv')
 
 # build simple index between family and average return percentage
 familyreturns = {}
-for x in strategies['Family'].keys():
-    familyreturns[strategies.at[x, 'Family']] = strategies.at[x, 'AvgPctRtn']
+try:
+    logging.debug('Building strategy families and average return percentages')
+    for x in strategies['Family'].keys():
+        familyreturns[strategies.at[x, 'Family']] = strategies.at[x, 'AvgPctRtn']
+except Exception:
+    logging.error('Could not build strategies', exc_info=True)
+
 
 # Set maximum risk ratio to 0.5% of the account
 # This ratio cannot be exceeded on a single trade
-maxriskratio = .005
+maxriskratio = .004
 
 # Initialize the stock lists
 boughtlist = []
@@ -97,8 +118,10 @@ while (marketopen and not ol.IsEOD) or cmdline.test is True:
             # how much capital should I use on this trade?
             if ordercount < 10:
                 tradecapital = cash / float(10-ordercount)
+                logging.debug('Orders are < 10; trade capital set to ' + str(tradecapital))
             else:
                 tradecapital = 0
+                logging.debug('Orders count is > 10; trade capital set to 0')
 
             # how many shares should I buy
             ordershares = int(tradecapital/float(inboundactions[stock].get('price')))
@@ -136,6 +159,7 @@ while (marketopen and not ol.IsEOD) or cmdline.test is True:
 
                 # place the order
                 try:
+                    logging.debug('Placing a bracket order for' + stock)
                     alpaca.submit_order(
                         side='buy',
                         symbol=stock,
@@ -152,8 +176,9 @@ while (marketopen and not ol.IsEOD) or cmdline.test is True:
 
                     )
                 except Exception as ex:
-                    print(stock, ex)
+                    logging.error('Could not submit buy order', exc_info=True)
             else:
+                logging.info('Skipping ' + stock)
                 if stock not in skiplist:
                     # add this to the skip list -- the timing just wasn't right
                     skiplist.append(stock)
@@ -177,24 +202,32 @@ while (marketopen and not ol.IsEOD) or cmdline.test is True:
     prgbar.finish()
 
     # write the bought and skip lists
-    with open (buyskippath, 'w', newline='\n', encoding='utf-8') as outfile:
-        tmp = {
-            'buy': boughtlist,
-            'skip': skiplist
-        }
-        tmp = json.dumps(status, indent=4)
-        outfile.write(tmp)
+    try:
+        logging.debug('Writing bought and skip list.')
+        with open (buyskippath, 'w', newline='\n', encoding='utf-8') as outfile:
+            tmp = {
+                'buy': boughtlist,
+                'skip': skiplist
+            }
+            tmp = json.dumps(status, indent=4)
+            outfile.write(tmp)
+    except Exception:
+        logging.error('Could not write buy and skip list', exc_info=True)
 
     # update broker status
-    with open (statuspath, 'w', newline='\n', encoding='utf-8') as outfile:
-        fieldnames = ['datetime', 'ticker', 'cash', 'TradeRiskAmt', 'TradeCapital', 'OrderShares', 'FloorPrice',
-                      'CeilingPrice', 'Decision']
-        writer = csv.DictWriter(outfile, fieldnames=fieldnames)
-        # write the header
-        writer.writeheader()
-        #writer.writerow(['datetime', 'ticker', 'cash', 'TradeRiskAmt', 'TradeCapital', 'OrderShares', 'FloorPrice', 'CeilingPrice', 'Decision'])
-        for x in status:
-            writer.writerow(status[x])
+    try:
+        logging.debug('Writing broker status')
+        with open (statuspath, 'w', newline='\n', encoding='utf-8') as outfile:
+            fieldnames = ['datetime', 'ticker', 'cash', 'TradeRiskAmt', 'TradeCapital', 'OrderShares', 'FloorPrice',
+                          'CeilingPrice', 'Decision']
+            writer = csv.DictWriter(outfile, fieldnames=fieldnames)
+            # write the header
+            writer.writeheader()
+            #writer.writerow(['datetime', 'ticker', 'cash', 'TradeRiskAmt', 'TradeCapital', 'OrderShares', 'FloorPrice', 'CeilingPrice', 'Decision'])
+            for x in status:
+                writer.writerow(status[x])
+    except Exception:
+        logging.error('Could not write broker status', exc_info=True)
 
 
     # wait until the next minute before checking again
