@@ -23,25 +23,33 @@ import math
 import csv
 import argparse
 
+# Get Quorum path from environment
+quorumroot = os.environ.get("OURO_QUORUM", "C:\\TEMP")
+actionpath = quorumroot + '\\broker-actions.json'
+quorumpath = quorumroot + '\\pathfinder-status.csv'
+logpath = quorumroot + '\\pathfinder.log'
+
 # Setup Logging
-logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
+logging.basicConfig(
+    filename=logpath,
+    filemode='a',
+    format='%(asctime)s %(name)s %(levelname)s %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    level=os.environ.get("LOGLEVEL", "INFO"))
 logging.info('OURO-PATHFINDER logging enabled.')
 
 # setup command line
 parser = argparse.ArgumentParser(description="OURO-HISTORY:  Daily stock data ingestion.")
 parser.add_argument("--test", action="store_true", default=False, help="Script runs in test mode.  FALSE (Default) = ignore if the market is closed; TRUE = only run while the market is open")
 cmdline = parser.parse_args()
-
-# Get Quorum path from environment
-quorumroot = os.environ.get("OURO_QUORUM", "C:\\TEMP")
-actionpath = quorumroot + '\\broker-actions.json'
-quorumpath = quorumroot + '\\pathfinder-status.csv'
+logging.info('Command line arguement; test mode is ' + str(cmdline.test))
 
 # initialize files
 with open (quorumpath, 'w', newline='\n', encoding='utf-8') as outfile:
     outfile.write('')
 with open (actionpath, 'w', newline='\n', encoding='utf-8') as outfile:
     outfile.write('{}')
+logging.info('Files initialized')
 
 logging.info('Quorum path set to ' + quorumpath)
 
@@ -97,8 +105,10 @@ logging.info ('Found ' + str(len(tmpraw)) + ' worth monitoring today.')
 stockraw = pd.DataFrame(tmpraw)  #.sort_values(by=['Vote'], ascending=False)
 if len(stockraw) > 750:
     stocklist = stockraw.nlargest(750, 'v')  # This is about all I can deal with
+    logging.info ('More than 750 stocks detected.')
 else:
     stocklist = stockraw
+    logging.info ('Less than 750 stocks detected.')
 
 # Free up memory
 tmpraw = None
@@ -194,7 +204,12 @@ while (marketopen and not ol.IsEOD) or cmdline.test is True:
             df[stock] = ol.calcind(pd.DataFrame(data))
 
             # Check if there is a significant difference between yesterday's open and today's
-            opendiff = ( df[stock].at[df[stock].index[-1], 'o']-closing[stock])/closing[stock]
+            opendiff = 1 # this will fail by default
+            try:
+                opendiff = ( df[stock].at[df[stock].index[-1], 'o']-closing[stock])/closing[stock]
+                logging.debug('Difference calculated.')
+            except Exception:
+                logging.error('Could not calculate the opening difference', exc_info=True)
 
             skip = False
             if firsttime and opendiff > .02: # guess threshold
