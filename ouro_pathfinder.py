@@ -28,6 +28,7 @@ quorumroot = os.environ.get("OURO_QUORUM", "C:\\TEMP")
 actionpath = quorumroot + '\\broker-actions.json'
 quorumpath = quorumroot + '\\pathfinder-status.csv'
 logpath = quorumroot + '\\pathfinder.log'
+installpath = os.environ.get("OURO_INSTALL", "D:\\OneDrive\\Dev\\Python\\Oura")
 
 # Setup Logging
 logging.basicConfig(
@@ -60,7 +61,7 @@ alpaca = tradeapi.REST()
 indicators = ol.cosdb('stockdata', 'daily_indicators', '/ticker')
 
 # Read the buy and sell strategies
-buy = pd.read_csv('D:\\OneDrive\\Dev\\Python\\Oura\\buy_strategies.csv')
+buy = pd.read_csv(installpath + '\\buy_strategies.csv')
 buylist = buy['strategy_id'].values.tolist()
 buyfam = buy['Family'].unique()
 
