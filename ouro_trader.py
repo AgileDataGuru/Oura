@@ -21,6 +21,7 @@ actionpath = quorumroot + '\\broker-actions.json'
 buyskippath = quorumroot + '\\broker-buyskip.json'
 statuspath = quorumroot + '\\broker-status.csv'
 logpath = quorumroot + '\\trader.log'
+installpath = os.environ.get("OURO_INSTALL", "D:\\OneDrive\\Dev\\Python\\Oura")
 
 # Setup Logging
 logging.basicConfig(
@@ -61,7 +62,7 @@ else:
 alpaca = tradeapi.REST()
 
 # Read the buy and sell strategies
-strategies = pd.read_csv('D:\\OneDrive\\Dev\\Python\\Oura\\buy_strategies.csv')
+buy = pd.read_csv(installpath + '\\buy_strategies.csv')
 
 # build simple index between family and average return percentage
 familyreturns = {}
