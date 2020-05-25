@@ -62,7 +62,7 @@ else:
 alpaca = tradeapi.REST()
 
 # Read the buy and sell strategies
-buy = pd.read_csv(installpath + '\\buy_strategies.csv')
+strategies = pd.read_csv(installpath + '\\buy_strategies.csv')
 
 # build simple index between family and average return percentage
 familyreturns = {}
