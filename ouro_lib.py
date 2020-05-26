@@ -223,7 +223,8 @@ def IsEOD():
     alpaca = tradeapi.REST()
     clock = alpaca.get_clock()
     delta = clock.next_close - clock.timestamp
-    if int(delta.total_seconds()/60) <= 60:
+    if int(delta.total_seconds()/60) <= 100:
+        # 100 minutes before the close is 2:40 PM EST or 1:40 CST
         return True
     else:
         return False
