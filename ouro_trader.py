@@ -85,11 +85,17 @@ status = {}
 
 # Wait for the market to open unless it's a test
 while not ol.IsOpen() and not cmdline.test:
+    logging.info('Market is closed; waiting for 1 minute.')
     ol.WaitForMinute()
 
 # Initialize MarketOpen
 marketopen = ol.IsOpen()
 eod = ol.IsEOD()
+
+# This is to work around an odd problem with Alpaca and the way it reports cash / buying power
+account = ol.GetAccount()
+cash = (float(account.buying_power) / (float(account.multiplier)))-25001 # minimum amount for day trading
+tradecapital = cash / 10
 
 while (marketopen and not eod) or cmdline.test is True:
     marketopen = ol.IsOpen()
@@ -112,18 +118,18 @@ while (marketopen and not eod) or cmdline.test is True:
             stockprice = float(inboundactions[stock].get('price'))
 
             # get basic account info; I need account.cash for calculations
-            account = ol.GetAccount()
-            cash = (float(account.buying_power) / (float(account.multiplier)))-25001 # minimum amount for day trading
+            # account = ol.GetAccount()
+            # cash = (float(account.buying_power) / (float(account.multiplier)))-25001 # minimum amount for day trading
 
             #set max trade risk
             traderiskamt = cash * maxriskratio
 
             # how much capital should I use on this trade?
             if ordercount < 10:
-                tradecapital = cash / float(10-ordercount)
+                # tradecapital = cash / float(10-ordercount)
                 logging.debug('Orders are < 10; trade capital set to ' + str(tradecapital))
             else:
-                tradecapital = 0
+                # tradecapital = 0
                 logging.debug('Orders count is > 10; trade capital set to 0')
 
             # how many shares should I buy
