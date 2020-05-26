@@ -158,6 +158,7 @@ while not ol.IsOpen() and not cmdline.test:
 
 # Initialize MarketOpen
 marketopen = ol.IsOpen()
+eod = ol.IsEOD()
 
 # initialize the counting array
 sgnl = ol.InitSignal(stocklist['ticker'], buyfam)
@@ -166,7 +167,9 @@ sgnl = ol.InitSignal(stocklist['ticker'], buyfam)
 firsttime = True
 
 # Main processing loop to look for stocks to buy
-while (marketopen and not ol.IsEOD) or cmdline.test is True:
+# NOTE:  Pathfinder doesn't cancel orders before the market closes so it can run the whole day
+while (marketopen) or cmdline.test is True:
+
     # reset the path finder status
     pf = {}
 

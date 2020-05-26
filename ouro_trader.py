@@ -89,9 +89,11 @@ while not ol.IsOpen() and not cmdline.test:
 
 # Initialize MarketOpen
 marketopen = ol.IsOpen()
+eod = ol.IsEOD()
 
-while (marketopen and not ol.IsEOD) or cmdline.test is True:
+while (marketopen and not eod) or cmdline.test is True:
     marketopen = ol.IsOpen()
+    eod = ol.IsEOD()
 
     # get ticker actions
     with open(actionpath, 'r', encoding='utf-8') as infile:
