@@ -209,12 +209,12 @@ while (marketopen) or cmdline.test is True:
             df[stock] = ol.calcind(pd.DataFrame(data))
 
             # Check if there is a significant difference between yesterday's open and today's
-            opendiff = 1 # this will fail by default
-            try:
-                opendiff = ( df[stock].at[df[stock].index[-1], 'o']-closing[stock])/closing[stock]
-                logging.debug('Difference calculated.')
-            except Exception:
-                logging.error('Could not calculate the opening difference', exc_info=True)
+            opendiff = 0 # bypassing the open diff check; all stocks are failing
+            # try:
+            #     opendiff = ( df[stock].at[df[stock].index[-1], 'o']-closing[stock])/closing[stock]
+            #     logging.debug('Difference calculated.')
+            # except Exception:
+            #     logging.error('Could not calculate the opening difference', exc_info=True)
 
             skip = False
             if firsttime and opendiff > .02: # guess threshold
