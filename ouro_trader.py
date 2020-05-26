@@ -152,20 +152,6 @@ while (marketopen and not eod) or cmdline.test is True:
                     traderiskamt = (ceilingprice-stockprice) * ordershares
                     floorprice = stockprice - ((ceilingprice-stockprice) * .5) # I never want to break even on risk
 
-                # Add this to the stocks already bought
-                boughtlist.append(stock)
-                status[stock] = {
-                    'datetime': logtime,
-                    'ticker': stock,
-                    'cash': cash,
-                    'TradeRiskAmt': traderiskamt,
-                    'TradeCapital': tradecapital,
-                    'OrderShares': ordershares,
-                    'FloorPrice': floorprice,
-                    'CeilingPrice': ceilingprice,
-                    'Decision': 'buy'
-                }
-
                 # place the order
                 try:
                     logging.debug('Placing a bracket order for' + stock)
@@ -184,6 +170,22 @@ while (marketopen and not eod) or cmdline.test is True:
                         }
 
                     )
+                    # Add this to the stocks already bought
+                    # Note:  Only add this to the bought list if the placing the order was successful
+                    #        This allows the stock to be re-tried if the price falls below the stop
+                    #        point before the buy order can be filled.
+                    boughtlist.append(stock)
+                    status[stock] = {
+                        'datetime': logtime,
+                        'ticker': stock,
+                        'cash': cash,
+                        'TradeRiskAmt': traderiskamt,
+                        'TradeCapital': tradecapital,
+                        'OrderShares': ordershares,
+                        'FloorPrice': floorprice,
+                        'CeilingPrice': ceilingprice,
+                        'Decision': 'buy'
+                    }
                 except Exception as ex:
                     logging.error('Could not submit buy order', exc_info=True)
             else:
