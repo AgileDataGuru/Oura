@@ -215,24 +215,17 @@ while (marketopen) or cmdline.test is True:
             logging.debug('Calculating technical indicators ' + stock)
             df[stock] = ol.calcind(pd.DataFrame(data))
 
-            # Check if there is a significant difference between yesterday's open and today's
-            opendiff = 0 # bypassing the open diff check; all stocks are failing
-            # try:
-            #     opendiff = ( df[stock].at[df[stock].index[-1], 'o']-closing[stock])/closing[stock]
-            #     logging.debug('Difference calculated.')
-            # except Exception:
-            #     logging.error('Could not calculate the opening difference', exc_info=True)
-
-            skip = False
-            if firsttime and opendiff > .02: # guess threshold
-                skip = True
+            # Find the recent high and low price
+            logging.debug('Calculating recent high and low for ' + stock)
+            recenthigh = df[stock]['c'].max()
+            recentlow = df[stock]['c'].min()
 
             # Check if the last strategy is in the buy strategy list
             try:
                 tmpstrat = df[stock].at[df[stock].index[-1], 'STRATEGY_ID']
                 #print(stock, df[stock].at[df[stock].index[-1], 'o'], closing[stock], opendiff, (tmpstrat in buylist and not skip))
                 # Add to the number of times this family has been seen for this stock
-                if tmpstrat in buylist and not skip:
+                if tmpstrat in buylist:
                     tmpfam = famref.get(tmpstrat)
                     v = sgnl[stock].get(tmpfam)
                     v += 1
@@ -248,8 +241,10 @@ while (marketopen) or cmdline.test is True:
                             actions[stock] = {
                                 'triggertime': datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
                                 'strategyfamily': tmpfam,
-                                'strategies': sgnl[stock],
-                                'price': df[stock].at[df[stock].index[-1], 'c']
+                                'price': df[stock].at[df[stock].index[-1], 'c'],
+                                'recenthigh': recenthigh,
+                                'recentlow': recentlow,
+                                'strategies': sgnl[stock]
                             }
 
                         else:
