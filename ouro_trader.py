@@ -282,7 +282,10 @@ while (marketopen and not eod) or cmdline.test is True:
             tmp = json.dumps(status, indent=4)
             outfile.write(tmp)
     except Exception:
-        logging.error('Could not write buy and skip list', exc_info=True)
+        try:
+            logging.error('Could not write buy and skip list', exc_info=True)
+        except:
+            print('Could not write to log file')
 
     # update broker status
     try:
@@ -297,7 +300,10 @@ while (marketopen and not eod) or cmdline.test is True:
             for x in status:
                 writer.writerow(status[x])
     except Exception:
-        logging.error('Could not write broker status', exc_info=True)
+        try:
+            logging.error('Could not write broker status', exc_info=True)
+        except:
+            print('Could not to log file.')
 
 
     # wait until the next minute before checking again

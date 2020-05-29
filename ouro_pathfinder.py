@@ -46,11 +46,18 @@ cmdline = parser.parse_args()
 logging.info('Command line arguement; test mode is ' + str(cmdline.test))
 
 # initialize files
-with open (quorumpath, 'w', newline='\n', encoding='utf-8') as outfile:
-    outfile.write('')
-with open (actionpath, 'w', newline='\n', encoding='utf-8') as outfile:
-    outfile.write('{}')
-logging.info('Files initialized')
+try:
+    with open (quorumpath, 'w', newline='\n', encoding='utf-8') as outfile:
+        outfile.write('')
+    with open (actionpath, 'w', newline='\n', encoding='utf-8') as outfile:
+        outfile.write('{}')
+    logging.info('Files initialized')
+except Exception as ex:
+    try:
+        logging.error('Could not initialize files.', exc_info=True)
+    except:
+        print('Could not write to log file.')
+    quit()
 
 logging.info('Quorum path set to ' + quorumpath)
 
@@ -256,21 +263,35 @@ while (marketopen) or cmdline.test is True:
     # update path finder status
     curtime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     with open (quorumpath, 'w', newline='\n', encoding='utf-8') as outfile:
-        writer = csv.writer(outfile)
-        # write the header
-        writer.writerow(['datetime', 'signal', 'ticker', 'family', 'signals', 'threshold'])
-        for x in sgnl:
-            for y in sgnl[x]:
-                if sgnl[x].get(y) > 0:
-                    tavg = famavg.get(y)
-                    if math.isnan(tavg):
-                        tavg = 0
-                    writer.writerow([curtime, 'buy', x, y, sgnl[x].get(y), tavg])
+        try:
+            writer = csv.writer(outfile)
+            # write the header
+            writer.writerow(['datetime', 'signal', 'ticker', 'family', 'signals', 'threshold'])
+            for x in sgnl:
+                for y in sgnl[x]:
+                    if sgnl[x].get(y) > 0:
+                        tavg = famavg.get(y)
+                        if math.isnan(tavg):
+                            tavg = 0
+                        writer.writerow([curtime, 'buy', x, y, sgnl[x].get(y), tavg])
+        except Exception as ex:
+            try:
+                logging.error('Could not write pathfinder status.', exc_info=True)
+            except:
+                print('Could not write to log file.')
+
 
     # write actions
     with open (actionpath, 'w', newline='\n', encoding='utf-8') as outfile:
         actionstr = json.dumps(actions, indent=4)
-        outfile.write(actionstr)
+        try:
+            outfile.write(actionstr)
+        except Exception as ex:
+            try:
+                logging.error('Could not write actions files.', exc_info=True)
+            except:
+                print('Could not write to log file.')
+
 
     # wait until the next minute before checking again
     ol.WaitForMinute()
