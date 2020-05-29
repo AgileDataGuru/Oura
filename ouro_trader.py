@@ -122,6 +122,7 @@ while (marketopen and not eod) or cmdline.test is True:
             # cash = (float(account.buying_power) / (float(account.multiplier)))-25001 # minimum amount for day trading
 
             #set max trade risk
+            maxriskamt = cash * maxriskratio
             traderiskamt = cash * maxriskratio
 
             # how much capital should I use on this trade?
@@ -138,19 +139,33 @@ while (marketopen and not eod) or cmdline.test is True:
             # reset pricing
             floorprice = 0
             ceilingprice = 0
+            buylimit = 0
+            traderiskpct = 0
+            familyret = 0
 
             if ordershares > 0 and stock not in boughtlist and ordercount < 10:
+                # get the family return percent
+                family = inboundactions[stock].get('strategyfamily')
+                familyret = float(familyreturns[family])
+
                 # set per-share floor price for bracket order
-                floorprice = stockprice - float(traderiskamt/ordershares)
+                # floorprice = stockprice - float(traderiskamt/ordershares)
+                floorpct = familyret * .75
+                floorprice = stockprice * (1-floorpct)
 
                 # set the ceiling price for the bracket order
-                family = inboundactions[stock].get('strategyfamily')
                 ceilingprice = stockprice * (1 + float(familyreturns[family]))
 
                 # Adjust the floor price if this looks like a bad pick
-                if (ceilingprice-stockprice) < float(traderiskamt/ordershares):
-                    traderiskamt = (ceilingprice-stockprice) * ordershares
+                if (stockprice * ordershares * floorpct) > maxriskamt:
                     floorprice = stockprice - ((ceilingprice-stockprice) * .5) # I never want to break even on risk
+
+                # Calculate the amount risked on this trade
+                traderiskamt = (stockprice - floorprice) * ordershares
+                traderiskpct = (stockprice - floorprice) / stockprice
+
+                # set the buy limit to 5% of the potential profit
+                buylimit = ((ceilingprice - stockprice) * .05) + stockprice
 
                 # place the order
                 try:
@@ -158,9 +173,10 @@ while (marketopen and not eod) or cmdline.test is True:
                     alpaca.submit_order(
                         side='buy',
                         symbol=stock,
-                        type='market',
+                        type='limit',
+                        limit_price=buylimit,
                         qty=ordershares,
-                        time_in_force='gtc', # I think bracket orders need gtc time in force
+                        time_in_force='gtc', # bracket order must be 'day' or 'gtc'
                         order_class='bracket',
                         take_profit={
                             'limit_price': ceilingprice
@@ -176,33 +192,76 @@ while (marketopen and not eod) or cmdline.test is True:
                     #        point before the buy order can be filled.
                     boughtlist.append(stock)
                     status[stock] = {
-                        'datetime': logtime,
-                        'ticker': stock,
-                        'cash': cash,
-                        'TradeRiskAmt': traderiskamt,
+                        'DateTime': logtime,
+                        'Ticker': stock,
+                        'Cash': cash,
                         'TradeCapital': tradecapital,
+                        'BuyPrice': stockprice,
+                        'BuyLimit': buylimit,
+                        'MaxRiskAmt': maxriskamt,
+                        'TradeRiskAmt': traderiskamt,
+                        'RiskPct': traderiskpct,
+                        'ReturnPct': familyret,
                         'OrderShares': ordershares,
                         'FloorPrice': floorprice,
                         'CeilingPrice': ceilingprice,
-                        'Decision': 'buy'
+                        'Decision': 'buy',
+                        'Reason': family
                     }
                 except Exception as ex:
                     logging.error('Could not submit buy order', exc_info=True)
+                    logging.info('Skipping ' + stock + ' because buy order failed.')
+                    if stock not in skiplist:
+                        # add this to the skip list -- the timing just wasn't right
+                        skiplist.append(stock)
+                        status[stock] = {
+                            'DateTime': logtime,
+                            'Ticker': stock,
+                            'Cash': cash,
+                            'TradeCapital': tradecapital,
+                            'BuyPrice': stockprice,
+                            'BuyLimit': buylimit,
+                            'MaxRiskAmt': maxriskamt,
+                            'TradeRiskAmt': traderiskamt,
+                            'RiskPct': traderiskpct,
+                            'ReturnPct': familyret,
+                            'OrderShares': ordershares,
+                            'FloorPrice': floorprice,
+                            'CeilingPrice': ceilingprice,
+                            'Decision': 'skip',
+                            'Reason': 'Buy order failed.'
+                        }
+
             else:
+                # define skipping reasons
+                skipreason = 'unknown'
+                if ordershares == 0:
+                    skipreason = 'Unable to buy shares.'
+                if stock in boughtlist:
+                    skipreason = 'Stock in bought list.'
+                if ordercount >= 10:
+                    skipreason = 'Too many existing positions'
+
                 logging.info('Skipping ' + stock)
                 if stock not in skiplist:
                     # add this to the skip list -- the timing just wasn't right
                     skiplist.append(stock)
                     status[stock] = {
-                        'datetime': logtime,
-                        'ticker': stock,
-                        'cash': cash,
-                        'TradeRiskAmt': traderiskamt,
+                        'DateTime': logtime,
+                        'Ticker': stock,
+                        'Cash': cash,
                         'TradeCapital': tradecapital,
+                        'BuyPrice': stockprice,
+                        'BuyLimit': buylimit,
+                        'MaxRiskAmt': maxriskamt,
+                        'TradeRiskAmt': traderiskamt,
+                        'RiskPct': traderiskpct,
+                        'ReturnPct': familyret,
                         'OrderShares': ordershares,
                         'FloorPrice': floorprice,
                         'CeilingPrice': ceilingprice,
-                        'Decision': 'skip'
+                        'Decision': 'skip',
+                        'Reason': skipreason
                     }
             ordercount = ol.GetOrderCount()
 
@@ -229,8 +288,8 @@ while (marketopen and not eod) or cmdline.test is True:
     try:
         logging.debug('Writing broker status')
         with open (statuspath, 'w', newline='\n', encoding='utf-8') as outfile:
-            fieldnames = ['datetime', 'ticker', 'cash', 'TradeRiskAmt', 'TradeCapital', 'OrderShares', 'FloorPrice',
-                          'CeilingPrice', 'Decision']
+            fieldnames = ['DateTime', 'Ticker', 'Cash', 'TradeCapital', 'BuyPrice', 'BuyLimit', 'MaxRiskAmt', 'TradeRiskAmt', 'RiskPct', 'ReturnPct', 'OrderShares', 'FloorPrice',
+                          'CeilingPrice', 'Decision', 'Reason']
             writer = csv.DictWriter(outfile, fieldnames=fieldnames)
             # write the header
             writer.writeheader()
