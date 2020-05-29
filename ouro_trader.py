@@ -116,6 +116,8 @@ while (marketopen and not eod) or cmdline.test is True:
         if stock not in boughtlist and stock not in skiplist:
             # how much is the stock
             stockprice = float(inboundactions[stock].get('price'))
+            recenthigh = float(inboundactions[stock].get('recenthigh'))
+            recentlow = float(inboundactions[stock].get('recentlow'))
 
             # get basic account info; I need account.cash for calculations
             # account = ol.GetAccount()
@@ -143,22 +145,32 @@ while (marketopen and not eod) or cmdline.test is True:
             traderiskpct = 0
             familyret = 0
 
-            if ordershares > 0 and stock not in boughtlist and ordercount < 10:
+            if stock not in boughtlist and ordercount < 10:
+                # reset the skip reason
+                skipreason = 'Unknown'
+
                 # get the family return percent
                 family = inboundactions[stock].get('strategyfamily')
                 familyret = float(familyreturns[family])
 
                 # set per-share floor price for bracket order
                 # floorprice = stockprice - float(traderiskamt/ordershares)
-                floorpct = familyret * .75
+                floorpct = familyret * .5
                 floorprice = stockprice * (1-floorpct)
 
                 # set the ceiling price for the bracket order
                 ceilingprice = stockprice * (1 + float(familyreturns[family]))
 
+                # Pricing reality check -- are the prices achievable in the recent past?
+                if ceilingprice > recenthigh:
+                    ceilingprice = recenthigh - 0.05  # $0.05 under the recent high
+                if floorprice > recentlow:
+                    skipreason = 'Proposed stop-loss price already hit today'
+                    ordershares = 0
+
                 # Adjust the floor price if this looks like a bad pick
                 if (stockprice * ordershares * floorpct) > maxriskamt:
-                    floorprice = stockprice - ((ceilingprice-stockprice) * .5) # I never want to break even on risk
+                    floorprice = stockprice - ((ceilingprice-stockprice) * .4) # I never want to break even on risk
 
                 # Calculate the amount risked on this trade
                 traderiskamt = (stockprice - floorprice) * ordershares
@@ -167,50 +179,96 @@ while (marketopen and not eod) or cmdline.test is True:
                 # set the buy limit to 5% of the potential profit
                 buylimit = ((ceilingprice - stockprice) * .05) + stockprice
 
-                # place the order
-                try:
-                    logging.debug('Placing a bracket order for' + stock)
-                    alpaca.submit_order(
-                        side='buy',
-                        symbol=stock,
-                        type='limit',
-                        limit_price=buylimit,
-                        qty=ordershares,
-                        time_in_force='gtc', # bracket order must be 'day' or 'gtc'
-                        order_class='bracket',
-                        take_profit={
-                            'limit_price': ceilingprice
-                        },
-                        stop_loss={
-                            'stop_price': floorprice
-                        }
+                # Calculate the trade return
+                traderet = (ceilingprice - buylimit) / buylimit
 
-                    )
-                    # Add this to the stocks already bought
-                    # Note:  Only add this to the bought list if the placing the order was successful
-                    #        This allows the stock to be re-tried if the price falls below the stop
-                    #        point before the buy order can be filled.
-                    boughtlist.append(stock)
-                    status[stock] = {
-                        'DateTime': logtime,
-                        'Ticker': stock,
-                        'Cash': cash,
-                        'TradeCapital': tradecapital,
-                        'BuyPrice': stockprice,
-                        'BuyLimit': buylimit,
-                        'MaxRiskAmt': maxriskamt,
-                        'TradeRiskAmt': traderiskamt,
-                        'RiskPct': traderiskpct,
-                        'ReturnPct': familyret,
-                        'OrderShares': ordershares,
-                        'FloorPrice': floorprice,
-                        'CeilingPrice': ceilingprice,
-                        'Decision': 'buy',
-                        'Reason': family
-                    }
-                except Exception as ex:
-                    logging.error('Could not submit buy order', exc_info=True)
-                    logging.info('Skipping ' + stock + ' because buy order failed.')
+                # Are we planning on making more than we risk?
+                if traderet-.005 <= traderiskpct:
+                    # This is a bad trade
+                    ordershares = 0
+                    skipreason = 'Risk outweighs reward'
+
+                # place the order
+                if ordershares > 0:
+                    try:
+                        logging.debug('Placing a bracket order for' + stock)
+                        alpaca.submit_order(
+                            side='buy',
+                            symbol=stock,
+                            type='limit',
+                            limit_price=buylimit,
+                            qty=ordershares,
+                            time_in_force='day', # bracket order must be 'day' or 'gtc'
+                            order_class='bracket',
+                            take_profit={
+                                'limit_price': ceilingprice
+                            },
+                            stop_loss={
+                                'stop_price': floorprice
+                            }
+
+                        )
+                        # Add this to the stocks already bought
+                        # Note:  Only add this to the bought list if the placing the order was successful
+                        #        This allows the stock to be re-tried if the price falls below the stop
+                        #        point before the buy order can be filled.
+                        boughtlist.append(stock)
+                        status[stock] = {
+                            'DateTime': logtime,
+                            'Ticker': stock,
+                            'Cash': cash,
+                            'TradeCapital': tradecapital,
+                            'BuyPrice': stockprice,
+                            'BuyLimit': buylimit,
+                            'MaxRiskAmt': maxriskamt,
+                            'TradeRiskAmt': traderiskamt,
+                            'RiskPct': traderiskpct,
+                            'FamilyReturnPct': familyret,
+                            'TradeReturnPct' : traderet,
+                            'OrderShares': ordershares,
+                            'RecentHigh': recenthigh,
+                            'RecentLow':  recentlow,
+                            'FloorPrice': floorprice,
+                            'CeilingPrice': ceilingprice,
+                            'Decision': 'buy',
+                            'Reason': family
+                        }
+                    except Exception as ex:
+                        logging.error('Could not submit buy order', exc_info=True)
+                        logging.info('Skipping ' + stock + ' because buy order failed.')
+                        if stock not in skiplist:
+                            # add this to the skip list -- the timing just wasn't right
+                            skiplist.append(stock)
+                            status[stock] = {
+                                'DateTime': logtime,
+                                'Ticker': stock,
+                                'Cash': cash,
+                                'TradeCapital': tradecapital,
+                                'BuyPrice': stockprice,
+                                'BuyLimit': buylimit,
+                                'MaxRiskAmt': maxriskamt,
+                                'TradeRiskAmt': traderiskamt,
+                                'RiskPct': traderiskpct,
+                                'FamilyReturnPct': familyret,
+                                'TradeReturnPct': traderet,
+                                'OrderShares': ordershares,
+                                'RecentHigh': recenthigh,
+                                'RecentLow': recentlow,
+                                'FloorPrice': floorprice,
+                                'CeilingPrice': ceilingprice,
+                                'Decision': 'skip',
+                                'Reason': skipreason + ' - buy order failed.'
+                            }
+                else:
+                    # define skipping reasons if not previously defined
+                    if ordershares == 0 and skipreason == 'Unknown':
+                        skipreason = 'Stock is too expensive or unable to buy shares.'
+                    if stock in boughtlist and skipreason == 'Unknown':
+                        skipreason = 'Stock in bought list.'
+                    if ordercount >= 10 and skipreason == 'Unknown':
+                        skipreason = 'Too many existing positions'
+
+                    logging.info('Skipping ' + stock)
                     if stock not in skiplist:
                         # add this to the skip list -- the timing just wasn't right
                         skiplist.append(stock)
@@ -224,45 +282,17 @@ while (marketopen and not eod) or cmdline.test is True:
                             'MaxRiskAmt': maxriskamt,
                             'TradeRiskAmt': traderiskamt,
                             'RiskPct': traderiskpct,
-                            'ReturnPct': familyret,
+                            'FamilyReturnPct': familyret,
+                            'TradeReturnPct' : traderet,
                             'OrderShares': ordershares,
+                            'RecentHigh': recenthigh,
+                            'RecentLow':  recentlow,
                             'FloorPrice': floorprice,
                             'CeilingPrice': ceilingprice,
                             'Decision': 'skip',
-                            'Reason': 'Buy order failed.'
+                            'Reason': skipreason
                         }
-
-            else:
-                # define skipping reasons
-                skipreason = 'unknown'
-                if ordershares == 0:
-                    skipreason = 'Unable to buy shares.'
-                if stock in boughtlist:
-                    skipreason = 'Stock in bought list.'
-                if ordercount >= 10:
-                    skipreason = 'Too many existing positions'
-
-                logging.info('Skipping ' + stock)
-                if stock not in skiplist:
-                    # add this to the skip list -- the timing just wasn't right
-                    skiplist.append(stock)
-                    status[stock] = {
-                        'DateTime': logtime,
-                        'Ticker': stock,
-                        'Cash': cash,
-                        'TradeCapital': tradecapital,
-                        'BuyPrice': stockprice,
-                        'BuyLimit': buylimit,
-                        'MaxRiskAmt': maxriskamt,
-                        'TradeRiskAmt': traderiskamt,
-                        'RiskPct': traderiskpct,
-                        'ReturnPct': familyret,
-                        'OrderShares': ordershares,
-                        'FloorPrice': floorprice,
-                        'CeilingPrice': ceilingprice,
-                        'Decision': 'skip',
-                        'Reason': skipreason
-                    }
+            # Update the order count after submitting the order
             ordercount = ol.GetOrderCount()
 
         #advance the progress bar
@@ -291,8 +321,9 @@ while (marketopen and not eod) or cmdline.test is True:
     try:
         logging.debug('Writing broker status')
         with open (statuspath, 'w', newline='\n', encoding='utf-8') as outfile:
-            fieldnames = ['DateTime', 'Ticker', 'Cash', 'TradeCapital', 'BuyPrice', 'BuyLimit', 'MaxRiskAmt', 'TradeRiskAmt', 'RiskPct', 'ReturnPct', 'OrderShares', 'FloorPrice',
-                          'CeilingPrice', 'Decision', 'Reason']
+            fieldnames = ['DateTime', 'Ticker', 'Cash', 'TradeCapital', 'BuyPrice', 'BuyLimit', 'MaxRiskAmt',
+                          'TradeRiskAmt', 'RiskPct', 'FamilyReturnPct', 'TradeReturnPct', 'OrderShares', 'RecentHigh',
+                          'RecentLow','FloorPrice', 'CeilingPrice', 'Decision', 'Reason']
             writer = csv.DictWriter(outfile, fieldnames=fieldnames)
             # write the header
             writer.writeheader()
