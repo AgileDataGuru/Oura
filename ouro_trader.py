@@ -238,7 +238,9 @@ while (marketopen and not eod) or cmdline.test is True:
                         logging.info('Skipping ' + stock + ' because buy order failed.')
                         if stock not in skiplist:
                             # add this to the skip list -- the timing just wasn't right
-                            skiplist.append(stock)
+                            # skiplist.append(stock) -- With buy limits, I don't need to do this.
+
+                            # Annotate what happened
                             status[stock] = {
                                 'DateTime': logtime,
                                 'Ticker': stock,
@@ -257,7 +259,7 @@ while (marketopen and not eod) or cmdline.test is True:
                                 'FloorPrice': floorprice,
                                 'CeilingPrice': ceilingprice,
                                 'Decision': 'skip',
-                                'Reason': skipreason + ' - buy order failed.'
+                                'Reason': skipreason + ' - buy order failed; eligible for retry.'
                             }
                 else:
                     # define skipping reasons if not previously defined
@@ -290,7 +292,7 @@ while (marketopen and not eod) or cmdline.test is True:
                             'FloorPrice': floorprice,
                             'CeilingPrice': ceilingprice,
                             'Decision': 'skip',
-                            'Reason': skipreason
+                            'Reason': skipreason + '; not eligible for retry.'
                         }
             # Update the order count after submitting the order
             ordercount = ol.GetOrderCount()
