@@ -87,6 +87,7 @@ print(stratDict)
 
 # Connect to the daily_indicators container
 dbconn = ol.cosdb('stockdata', 'strategies', '/family')
+sqlconn = ol.sqldb()
 
 # loop through the stratgies and write them to the database
 col = ['id', 'family', 'name']
@@ -94,17 +95,25 @@ with open('D:\OneDrive\Dev\SQL\strategy_names.csv', 'w', encoding='utf-8') as f:
     writer = csv.DictWriter(f, fieldnames=col)
     writer.writeheader()
     for x in stratDict:
+        # Create the csv file
         row = {
             'id':x,
             'family':stratDict[x]['family'],
             'name':stratDict[x]['name']
         }
         writer.writerow(row)
+        # try:
+        #     # write to cosmos db
+        #     dbconn.create_item(body=row)
+        #     logging.debug('Created document for ' + x )
+        # except:
+        #     logging.error('Could not create document for ' + x)
         try:
-            dbconn.create_item(body=row)
-            logging.debug('Created document for ' + x )
+            # write to SQL db
+            qry = "INSERT INTO stockdata..strategy_list (id, family, name) VALUES ('" + x + "', '" + stratDict[x]['family'] + "', '" + stratDict[x]['name'] + "')"
+            ol.qrysqldb(sqlconn, qry)
         except:
-            logging.error('Could not create document for ' + x)
+            logging.error('Could not insert ' + x + ' into the SQL database')
 
 
 

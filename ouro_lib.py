@@ -15,6 +15,28 @@ from datetime import datetime
 from datetime import timedelta
 import time
 from dateutil.parser import parse
+import pyodbc
+
+def sqldb (dsn='ouro_dsn', usr='unknown', pwd='unknown'):
+    # connect to a SQL server DSN
+    sqluser = sqlpwd=os.environ.get("OURO_SQL_USER", usr)
+    sqlpwd=os.environ.get("OURO_SQL_PWD", pwd)
+    pyodbc.autocommit = True
+    try:
+        sqlsvr = pyodbc.connect('DSN=Ouro;UID=' + sqluser + ';PWD=' + sqlpwd, autocommit=True)
+        return sqlsvr.cursor()
+    except:
+        return None
+
+def qrysqldb(csr, query):
+    # Execute a query against a connection to a SQL database
+    try:
+        ds = csr.execute(query)
+        return ds
+    except Exception as ex:
+        print(query)
+        print(ex)
+        return None
 
 def cosdb (db, ctr, prtn):
     # Connect to a CosmosDB database and container
