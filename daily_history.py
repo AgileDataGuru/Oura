@@ -17,6 +17,7 @@ from azure.cosmos import exceptions, CosmosClient, PartitionKey
 from dateutil.parser import parse       # used to create date/time objects from stringsec
 import time
 import argparse
+import ouro_lib as ol
 
 # Setup Logging
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
@@ -51,17 +52,20 @@ else:
     slist = ['CVS', 'DRI', 'EVR','FDEF', 'IBM', 'MPW', 'PPBI', 'PPL', 'PXD', 'QIWI', 'RL', 'TX', 'VZ']
 
 # Initialize the Cosmos client
-endpoint = os.environ.get("OURO_DOCUMENTS_ENDPOINT", "SET OURO_DOCUMENTS_ENDPOINT IN ENVIRONMENT")
-key = os.environ.get("OURO_DOCUMENTS_KEY", "SET OURO_DOCUMENTS_KEY IN ENVIRONMENT")
-client = CosmosClient(endpoint, key)
-database_name = 'stockdata'
-database = client.create_database_if_not_exists(id=database_name)
-container = database.create_container_if_not_exists(
-    id="daily",
-    partition_key=PartitionKey(path="/ticker"),
-    offer_throughput=400
-)
-logging.info ('Azure-Cosmos client initialized; connected to ' + endpoint)
+# endpoint = os.environ.get("OURO_DOCUMENTS_ENDPOINT", "SET OURO_DOCUMENTS_ENDPOINT IN ENVIRONMENT")
+# key = os.environ.get("OURO_DOCUMENTS_KEY", "SET OURO_DOCUMENTS_KEY IN ENVIRONMENT")
+# client = CosmosClient(endpoint, key)
+# database_name = 'stockdata'
+# database = client.create_database_if_not_exists(id=database_name)
+# container = database.create_container_if_not_exists(
+#     id="daily",
+#     partition_key=PartitionKey(path="/ticker"),
+#     offer_throughput=400
+# )
+# logging.info ('Azure-Cosmos client initialized; connected to ' + endpoint)
+
+# Initialize SQL connection
+sqlc = ol.sqldb()
 
 # configure common dates
 today = datetime.datetime.utcnow()
@@ -70,7 +74,7 @@ yesterday = today - datetime.timedelta(days=1)
 earliest = today - datetime.timedelta(days=60)
 
 counter = -1    # the number of items processed
-rucounter = 0     # the number of requests made
+# rucounter = 0     # the number of requests made
 procstart = datetime.datetime.now()
 
 for x in slist:
@@ -78,21 +82,25 @@ for x in slist:
     counter = counter + 1
 
     # check the throttle; limit this process to 100RU/sec
-    throttle = ((datetime.datetime.now()-procstart).total_seconds())*400
-    if rucounter > throttle:
-        logging.debug('Sleeping ' + str((rucounter - throttle) / 400) + ' seconds to throttle the process.')
-        time.sleep((rucounter-throttle)/400)
+    # throttle = ((datetime.datetime.now()-procstart).total_seconds())*400
+    # if rucounter > throttle:
+    #     logging.debug('Sleeping ' + str((rucounter - throttle) / 400) + ' seconds to throttle the process.')
+    #     time.sleep((rucounter-throttle)/400)
 
     # Get the last time daily data for this stock was cached
     # Note: 4.24 RU
-    query = "select value max(d.tradedate) from daily d where d.ticker = '" + x + "'"
-    rucounter = rucounter + 1
+    # query = "select value max(d.tradedate) from daily d where d.ticker = '" + x + "'"
+    # rucounter = rucounter + 1
+
+    # SQL Query
+    query = "SELECT MAX(tradedate) FROM stockdata..ohlcv_day WHERE ticker = '" + x + "';"
     startdate = today
     try:
-        dt = list(container.query_items(
-            query=query,
-            enable_cross_partition_query=False
-        ))
+        # dt = list(container.query_items(
+        #     query=query,
+        #     enable_cross_partition_query=False
+        # ))
+        dt = ol.qrysqldb(sqlc, query)
         startdate = parse(dt[0]) + timedelta(days=1)
         startdate_str = startdate.strftime('%Y-%m-%d')
         logging.debug ('Last daily date for ' + x + ' is ' + startdate_str)
@@ -131,26 +139,28 @@ for x in slist:
             }
             # write the data
             # Note:  Approximately 4.2 RU
-            rucounter = rucounter + 1
-            try:
-                container.create_item(body=row)
-                logging.debug('Created document for ' + x + ' on ' + tradedate)
-            except:
-                logging.error('Could not create document for ' + x + ' on ' + tradedate)
+            # rucounter = rucounter + 1
+            # # Try to write this to cosmos db
+            # try:
+            #     container.create_item(body=row)
+            #     logging.debug('Created document for ' + x + ' on ' + tradedate)
+            # except:
+            #     logging.error('Could not create document for ' + x + ' on ' + tradedate)
+
+            # Try writing this to SQL
+            query = "INSERT INTO stockdata..ohlcv_day (ticker, tradedate, o, h, l, c, v) VALUES (" \
+                    "'" + x + "', " \
+                    "'" + tradedate + "', "\
+                    "'" + str(jsondata[r]['Open']) + "', "\
+                    "'" + str(jsondata[r]['High']) + "', "\
+                    "'" + str(jsondata[r]['Low']) + "', " \
+                    "'" + str(jsondata[r]['Close']) + "', " \
+                    "'" + str(jsondata[r]['Volume']) + "'"\
+                    ")"
+            ol.qrysqldb(sqlc, query)
         logging.info(
             '(' + str(counter) + ' of ' + str(len(slist)) + ') Finished processing ' + x)
 
-
-
-
-
-
-
-
-    # Get intra-day data for last 24 hours
-    #startdate = datetime.datetime.now() + datetime.timedelta(hours=-72)
-    #startdate_str = startdate.strftime('%Y-%m-%d')
-    #data = yf.download(x, startdate_str, interval='5m', prepost='False')
 
 
 
