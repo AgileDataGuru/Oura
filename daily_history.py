@@ -106,6 +106,7 @@ for x in slist:
         if dts is not None:
             startdate = parse(dts) + timedelta(days=1)
     except Exception as ex:
+        logging.error('Setting start date to earliest date. ', exc_info=True)
         startdate = earliest
 
     # If the last date was in the past, get new data; otherwise, skip it
@@ -120,8 +121,7 @@ for x in slist:
             jsondata = json.loads(data.to_json(orient='index'))
         except Exception as ex:
             jsondata = {}
-            logging.warning ('Data for ' + x + ' has problems; it is being skipped.')
-            print(ex)
+            logging.warning ('Data for ' + x + ' has problems; it is being skipped.', exc_info=True)
 
         # Transform the json into a format easier to analyze and write it to Cosmos DB
         for r in jsondata:
