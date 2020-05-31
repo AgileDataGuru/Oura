@@ -65,7 +65,7 @@ else:
 # logging.info ('Azure-Cosmos client initialized; connected to ' + endpoint)
 
 # Initialize SQL connection
-sqlc = ol.sqldb()
+sqlc = ol.sqldbcursor()
 
 # configure common dates
 today = datetime.datetime.utcnow()

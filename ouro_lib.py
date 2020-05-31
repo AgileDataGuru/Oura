@@ -17,7 +17,18 @@ import time
 from dateutil.parser import parse
 import pyodbc
 
-def sqldb (dsn='ouro_dsn', usr='unknown', pwd='unknown'):
+def sqldbconn (dsn='ouro_dsn', usr='unknown', pwd='unknown'):
+    # connect to a SQL server DSN
+    sqluser = sqlpwd=os.environ.get("OURO_SQL_USER", usr)
+    sqlpwd=os.environ.get("OURO_SQL_PWD", pwd)
+    pyodbc.autocommit = True
+    try:
+        sqlsvr = pyodbc.connect('DSN=Ouro;UID=' + sqluser + ';PWD=' + sqlpwd, autocommit=True)
+        return sqlsvr
+    except:
+        return None
+
+def sqldbcursor (dsn='ouro_dsn', usr='unknown', pwd='unknown'):
     # connect to a SQL server DSN
     sqluser = sqlpwd=os.environ.get("OURO_SQL_USER", usr)
     sqlpwd=os.environ.get("OURO_SQL_PWD", pwd)
@@ -124,6 +135,22 @@ def calcind(df):
         df['ADOSC'] = ta.ADOSC(df['h'], df['l'], df['c'], df['v'], fastperiod=3, slowperiod=10)
         df['OBV'] = ta.OBV(df['c'], df['v'])
 
+        # Candlestick Patterns
+        df['DJI'] = ta.CDLDOJI (df['o'], df['h'], df['l'], df['c'])
+        df['ENG'] = ta.CDLENGULFING (df['o'], df['h'], df['l'], df['c'])
+        df['HMR'] = ta.CDLHAMMER (df['o'], df['h'], df['l'], df['c'])
+        df['HGM'] = ta.CDLHANGINGMAN (df['o'], df['h'], df['l'], df['c'])
+        df['PRC'] = ta.CDLPIERCING (df['o'], df['h'], df['l'], df['c'])
+        df['DCC'] = ta.CDLDARKCLOUDCOVER (df['o'], df['h'], df['l'], df['c'], penetration=0)
+        df['MSR'] = ta.CDLMORNINGSTAR (df['o'], df['h'], df['l'], df['c'], penetration=0)
+        df['ESR'] = ta.CDLEVENINGSTAR (df['o'], df['h'], df['l'], df['c'], penetration=0)
+        df['KKR'] = ta.CDLKICKING (df['o'], df['h'], df['l'], df['c'])
+        df['SSR'] = ta.CDLSHOOTINGSTAR (df['o'], df['h'], df['l'], df['c'])
+        df['IHM'] = ta.CDLINVERTEDHAMMER (df['o'], df['h'], df['l'], df['c'])
+        df['TWS'] = ta.CDL3WHITESOLDIERS (df['o'], df['h'], df['l'], df['c'])
+        df['TBC'] = ta.CDL3BLACKCROWS (df['o'], df['h'], df['l'], df['c'])
+        df['STP'] = ta.CDLSPINNINGTOP (df['o'], df['h'], df['l'], df['c'])
+
         # ADX Trend Strength
         df['ADXTREND'] = 'Weak'
         df.loc[df['ADX14'] >= 25, 'ADXTREND'] = 'Changing'
@@ -141,6 +168,8 @@ def calcind(df):
         df['AROONVOTE'] = 0
         df.loc[df['AROONOSC'] >= 25, 'AROONVOTE'] = 1    # This threshold is a guess
         df.loc[df['AROONOSC'] <= -25, 'AROONVOTE'] = -1  # This threshold is a guess
+
+
 
         # BOP Signal
         df['BOPVOTE'] = 0
