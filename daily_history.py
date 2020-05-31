@@ -101,16 +101,17 @@ for x in slist:
         #     enable_cross_partition_query=False
         # ))
         dt = ol.qrysqldb(sqlc, query)
-        startdate = parse(dt[0]) + timedelta(days=1)
-        startdate_str = startdate.strftime('%Y-%m-%d')
-        logging.debug ('Last daily date for ' + x + ' is ' + startdate_str)
-    except:
+        dts = dt.fetchone()[0]
         startdate = earliest
-        startdate_str = str(earliest.strftime('%Y-%m-%d'))
-        logging.debug('No date found for ' + x + '; getting data between ' + startdate_str + ' and ' + today_str)
+        if dts is not None:
+            startdate = parse(dts) + timedelta(days=1)
+    except Exception as ex:
+        startdate = earliest
 
     # If the last date was in the past, get new data; otherwise, skip it
+    startdate_str = startdate.strftime('%Y-%m-%d')
     if startdate < today:
+
         try:
             logging.info(
                 '(' + str(counter) + ' of ' + str(len(slist)) + ') ' + x + ':  Getting data between ' + startdate_str + ' and ' + today_str)
