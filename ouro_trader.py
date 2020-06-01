@@ -161,12 +161,12 @@ while (marketopen and not eod) or cmdline.test is True:
                 # set the ceiling price for the bracket order
                 ceilingprice = stockprice * (1 + float(familyreturns[family]))
 
-                # Pricing reality check -- are the prices achievable in the recent past?
-                if ceilingprice > recenthigh:
-                    ceilingprice = recenthigh - 0.05  # $0.05 under the recent high
-                if floorprice > recentlow:
-                    skipreason = 'Proposed stop-loss price already hit today'
-                    ordershares = 0
+                # # Pricing reality check -- are the prices achievable in the recent past?
+                # if ceilingprice > recenthigh:
+                #     ceilingprice = recenthigh - 0.05  # $0.05 under the recent high
+                # if floorprice > recentlow:
+                #     skipreason = 'Proposed stop-loss price already hit today'
+                #     ordershares = 0
 
                 # Adjust the floor price if this looks like a bad pick
                 if (stockprice * ordershares * floorpct) > maxriskamt:

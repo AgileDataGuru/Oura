@@ -31,6 +31,8 @@ logging.info('UTIL_INTRADAY_TRAINING_DATA logging enabled.')
 parser = argparse.ArgumentParser(description="UTIL_INTRADAY_TRAINING_DATA:  Ingest intraday minute-by-minute trading data.")
 parser.add_argument("--test", action="store_true", default=False, help="Script runs in test mode.  FALSE (Default) = update the entire universe of stock; TRUE = update a small subset of stocks to make testing quicker")
 parser.add_argument("--start", help="Specify the first date that intraday data is gathered from.  The default is the last date/time stored in the training data database for that stock.")
+parser.add_argument("--source", default='db', help="Whether to get data from Yahoo Finance or cached data in SQL Server.  (Default) = db; (Alternate) = yahoo")
+
 cmdline = parser.parse_args()
 
 # Connect to the daily_indicators container
