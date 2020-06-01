@@ -200,16 +200,16 @@ def calcind(df):
 
         # PPO Votes; cousin of MACD
         df['PPOVOTE'] = 0
-        df.loc[df['PPO12'] >= 0, 'RSIVOTE'] = 1
-        df.loc[df['PPO12'] <= 0, 'RSIVOTE'] = -1
+        #df.loc[df['PPO12'] >= 0, 'RSIVOTE'] = 1
+        #df.loc[df['PPO12'] <= 0, 'RSIVOTE'] = -1
 
         # ROC Votes
         # Not using ROC because it's prone to whipsaws near the 0 line; and, this isn't used to trade
 
         # RSI Votes
         df['RSIVOTE'] = 0
-        df.loc[df['RSI14'] >= 70, 'RSIVOTE'] = 1
-        df.loc[df['RSI14'] <= 30, 'RSIVOTE'] = -1
+        df.loc[df['RSI14'] >= 70, 'RSIVOTE'] = -1
+        df.loc[df['RSI14'] <= 30, 'RSIVOTE'] = 1
 
         # STOCH Votes
         df['STOCHVOTE'] = 0
