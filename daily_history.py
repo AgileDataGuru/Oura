@@ -71,7 +71,7 @@ sqlc = ol.sqldbcursor()
 today = datetime.datetime.utcnow()
 today_str = today.strftime('%Y-%m-%d')
 yesterday = today - datetime.timedelta(days=1)
-earliest = today - datetime.timedelta(days=60)
+earliest = today - datetime.timedelta(days=180)
 
 counter = -1    # the number of items processed
 # rucounter = 0     # the number of requests made

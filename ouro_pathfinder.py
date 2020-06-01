@@ -65,7 +65,9 @@ logging.info('Quorum path set to ' + quorumpath)
 alpaca = tradeapi.REST()
 
 # Connect to the daily_indicators container
-indicators = ol.cosdb('stockdata', 'daily_indicators', '/ticker')
+#indicators = ol.cosdb('stockdata', 'daily_indicators', '/ticker')
+sqlconn = ol.sqldbconn()
+sqlcsr = sqlconn.cursor()
 
 # Read the buy and sell strategies
 buy = pd.read_csv(installpath + '\\buy_strategies.csv')
@@ -100,17 +102,16 @@ for x in buy['strategy_id']:
     f = 1
 
 # Get the last date in the daily table
-ddate = ol.qrycosdb(indicators, 'SELECT value max(d.tradedate) from daily d')[0]
+#ddate = ol.qrycosdb(indicators, 'SELECT value max(d.tradedate) from daily d')[0]
+dd = ol.qrysqldb(csr=sqlcsr,query='SELECT MAX(tradedate) FROM stockdata..ohlcv_day')
+ddate = dd.fetchone()[0]
 
-# get list of stocks in the universe; find stocks potentially worth trading
-# NOTE:  With $1000 starting capital, stocks that cost over $100 are over my money management budget
-query = "select distinct d.ticker, d.STRATEGY_ID, d.tradedate, d.v, d.h-d.l Change from daily_indicators d where d.l < 100 and d.o > 5 and d.l > 5 and d.tradedate = '" + ddate + "' and d.STRATEGY_ID in (" + buystr + ") order by d.v desc"
-tmpraw = ol.qrycosdb(indicators, query)
-logging.info ('Found ' + str(len(tmpraw)) + ' worth monitoring today.')
+# Find stocks worth buying
+query = "select ticker, strategy_id, tradedate, v, h-l change from stockdata..ohlcv_day o " \
+        "where (kkr > 0 or msr > 0 or tws > 0) and c > 5 and tradedate = '" + ddate + "' order by v desc"
 
-# Put the stock list into a dataframe ordered by their buy vote
-# A higher vote number, the more concensus; the lower, the less concensus
-stockraw = pd.DataFrame(tmpraw)  #.sort_values(by=['Vote'], ascending=False)
+stockraw = pd.read_sql_query(query, sqlconn)
+logging.info ('Found ' + str(len(stockraw)) + ' worth monitoring today.')
 if len(stockraw) > 750:
     stocklist = stockraw.nlargest(750, 'v')  # This is about all I can deal with
     logging.info ('More than 750 stocks detected.')
@@ -134,11 +135,11 @@ today = datetime.datetime.utcnow()
 yesterday = today - datetime.timedelta(days=1)
 ystr = ol.GetLastOpenMarket()
 
-query = "select d.ticker, d.c from daily d where d.tradedate = '" + ystr + "' order by d.tradedate desc"
-closingraw  = ol.qrycosdb(indicators, query)
-closing = {}
-for x in closingraw:
-    closing.update({x.get('ticker'):x.get('c')})
+# query = "select d.ticker, d.c from daily d where d.tradedate = '" + ystr + "' order by d.tradedate desc"
+# closingraw  = ol.qrycosdb(indicators, query)
+# closing = {}
+# for x in closingraw:
+#     closing.update({x.get('ticker'):x.get('c')})
 
 # Chunk stocks into groups of 200, the limit that can be requested at once
 while stockctr < len(stocklist['ticker']):
@@ -150,7 +151,7 @@ while stockctr < len(stocklist['ticker']):
     stockctr = stockctr + 1
     setctr = setctr + 1
     if setctr == 200:
-        # Save the set and rest the counter for the next one
+        # Save the set and reset the counter for the next one
         stockset.update({set : sl})
         set = set + 1
         setctr = 0
@@ -220,38 +221,55 @@ while (marketopen) or cmdline.test is True:
             recenthigh = df[stock]['c'].max()
             recentlow = df[stock]['c'].min()
 
-            # Check if the last strategy is in the buy strategy list
-            try:
-                tmpstrat = df[stock].at[df[stock].index[-1], 'STRATEGY_ID']
-                #print(stock, df[stock].at[df[stock].index[-1], 'o'], closing[stock], opendiff, (tmpstrat in buylist and not skip))
-                # Add to the number of times this family has been seen for this stock
-                if tmpstrat in buylist:
-                    tmpfam = famref.get(tmpstrat)
-                    v = sgnl[stock].get(tmpfam)
-                    v += 1
-                    sgnl[stock].update({tmpfam:v})
+            # Find must-buy candlesticks
+            recentkkr = df[stock]['KKR'].max()
+            recenteng = df[stock]['ENG'].max()
+            recentmsr = df[stock]['MSR'].max()
+            recentprc = df[stock]['PRC'].max()
+            recenttws = df[stock]['TWS'].max()
 
-                    # check if the value exceeds the average buy warning
-                    tavg = famavg.get(tmpfam)
-                    if not math.isnan(tavg):
-                        # print (stock, v > tavg, stock not in actions.keys(), df[stock].at[df[stock].index[-1], 'c'])
-                        if v > tavg and stock not in actions.keys():
-                            logging.debug('Buy signal triggered for ' + stock + ' with ' + str(v) + ' signals in ' + tmpfam)
-                            # record the buy trigger
-                            actions[stock] = {
-                                'triggertime': datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
-                                'strategyfamily': tmpfam,
-                                'price': df[stock].at[df[stock].index[-1], 'c'],
-                                'recenthigh': recenthigh,
-                                'recentlow': recentlow,
-                                'strategies': sgnl[stock]
-                            }
+            # Check for must-buy candlesticks
+            if recentkkr > 0 or recenteng > 0 or recentmsr > 0 or recentprc > 0 or recenttws > 0:
+                actions[stock] = {
+                    'triggertime': datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
+                    'strategyfamily': 'Candlestick',
+                    'price': df[stock].at[df[stock].index[-1], 'c'],
+                    'recenthigh': recenthigh,
+                    'recentlow': recentlow,
+                    'strategies': sgnl[stock]
+                }
+            else:
+                # Check if the last strategy is in the buy strategy list
+                try:
+                    tmpstrat = df[stock].at[df[stock].index[-1], 'STRATEGY_ID']
+                    #print(stock, df[stock].at[df[stock].index[-1], 'o'], closing[stock], opendiff, (tmpstrat in buylist and not skip))
+                    # Add to the number of times this family has been seen for this stock
+                    if tmpstrat in buylist:
+                        tmpfam = famref.get(tmpstrat)
+                        v = sgnl[stock].get(tmpfam)
+                        v += 1
+                        sgnl[stock].update({tmpfam:v})
 
-                        else:
-                            logging.debug('Buy signal ' + str(v) + ' less than the threshold ' + str(tavg) + ' for family ' + tmpfam)
+                        # check if the value exceeds the average buy warning
+                        tavg = famavg.get(tmpfam)
+                        if not math.isnan(tavg):
+                            # print (stock, v > tavg, stock not in actions.keys(), df[stock].at[df[stock].index[-1], 'c'])
+                            if v > tavg and stock not in actions.keys():
+                                logging.debug('Buy signal triggered for ' + stock + ' with ' + str(v) + ' signals in ' + tmpfam)
+                                # record the buy trigger
+                                actions[stock] = {
+                                    'triggertime': datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
+                                    'strategyfamily': tmpfam,
+                                    'price': df[stock].at[df[stock].index[-1], 'c'],
+                                    'recenthigh': recenthigh,
+                                    'recentlow': recentlow,
+                                    'strategies': sgnl[stock]
+                                }
+                            else:
+                                logging.debug('Buy signal ' + str(v) + ' less than the threshold ' + str(tavg) + ' for family ' + tmpfam)
 
-            except Exception as ex:
-                logging.debug ('Could not check signal for ' + stock)
+                except Exception as ex:
+                    logging.debug ('Could not check signal for ' + stock)
             prgbar.next()
         prgbar.finish()
 

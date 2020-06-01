@@ -52,7 +52,7 @@ else:
 # process the daily stocks
 for stock in stocklist:
 
-# Get all the daily data for the past 60 days for the given stock
+# Get all the daily data for the past 180 days for the given stock
 # Note: 4.88 RU per 100 rows
     if cmdline.source == 'yahoo':
         query = "SELECT d.id, d.ticker, d.tradedate, d.high as h, d.low as l, d.open as o, d.adjclose as c, d.volume as v FROM daily d where d.ticker = '" + stock + "'"
@@ -69,10 +69,13 @@ for stock in stocklist:
         if cmdline.source == 'yahoo':
             query = "SELECT VALUE max(d.tradedate) from daily d where d.ticker = '" + stock + "'"
             dt_list = ol.qrycosdb(indicators, query)
+            # NEED TO CREATE A LIST FROM COSMOSDB
         else:
-            query = "SELECT min(tradedate) FROM stockdata..ohlcv_day WHERE strategy_id is NULL and ticker = '" + stock[0] + "'"
+            dt=[]
+            query = "SELECT tradedate FROM stockdata..ohlcv_day WHERE strategy_id is NULL and ticker = '" + stock[0] + "'"
             dt_list = ol.qrysqldb(dhistory, query)
-            dt = parse(dt_list.fetchone()[0])
+            for d in dt_list.fetchall():
+                dt.append(d[0])
 
         # Calcualte the indicators
         df = ol.calcind(df)
@@ -80,7 +83,8 @@ for stock in stocklist:
         # Write them back to the db
         rc=0
         for x in json.loads(df.to_json(orient='records')):
-            if parse(x['tradedate']) > dt:
+            #if parse(x['tradedate']) in dt:
+            if x['tradedate'] in dt:
                 if cmdline.source == 'yahoo':
                     # write the data to cosmosdb
                     try:
