@@ -52,14 +52,6 @@ parser.add_argument("--marketopen", action="store_true", default=False, help="Fo
 cmdline = parser.parse_args()
 logging.info('Command line arguement; test mode is ' + str(cmdline.test))
 
-# define time-in-force rule
-if cmdline.test:
-    inforce = 'gtc' # I don't want orders to error-out when testing
-    logging.debug('Inforce set to GTC')
-else:
-    inforce = 'day' # when trading for real, I should use instant-or-cancel (IOC) orders to avoid waiting
-    logging.debug('Inforce set to DAY')
-
 # Initialize the Alpaca API
 alpaca = tradeapi.REST()
 
