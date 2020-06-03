@@ -269,13 +269,12 @@ def IsOpen():
     clock = alpaca.get_clock()
     return clock.is_open
 
-def IsEOD():
+def IsEOD(minutes=75):
     # check if we're at the end of the day
     alpaca = tradeapi.REST()
     clock = alpaca.get_clock()
     delta = clock.next_close - clock.timestamp
-    if int(delta.total_seconds()/60) <= 100:
-        # 100 minutes before the close is 2:40 PM EST or 1:40 CST
+    if int(delta.total_seconds()/60) <= minutes:
         return True
     else:
         return False

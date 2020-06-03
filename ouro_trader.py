@@ -124,7 +124,7 @@ while (marketopen and not eod) or cmdline.test is True:
     for stock in inboundactions:
         if inboundcount >= 10:
             # Give the order execution engine time to catch up
-            os.wait(2)
+            os.sleep(2)
             # Reduce the risk if bandwaggoning is happening
             bandwagondiscount = .3
             logging.debug('Bandwagonning detected; reducing risk and delaying order placement.')
@@ -362,6 +362,34 @@ while (marketopen and not eod) or cmdline.test is True:
 
     # wait until the next minute before checking again
     ol.WaitForMinute()
+
+# Get stocks that should be sold early
+crs = ol.sqldbcursor()
+query = "select ticker from stockdata..ticker_statistics where sellwhen = 'Early'"
+se = crs.execute(query)
+earlylist = []
+for x in se.fetchall():
+    earlylist.append(x[0])
+
+# Start wrapping up the day
+while (not ol.IsEOD(minutes=15)):
+    # Check if a stock on an open order is in the early-sell list and cancel it
+    for stock in ol.GetOrders():
+        if stock.symbol in earlylist:
+            try:
+                alpaca.cancel_order(stock.id)
+            except Exception as ex:
+                logging.error('Could not cancel order', exc_info=True)
+    # If a held position is in the early sell list, close it
+    for stock in ol.GetPositions():
+        if stock.symbol in earlylist:
+            try:
+                alpaca.close_position(stock.symbol)
+            except Exception as ex:
+                logging.error('Could not close position', exc_info=True)
+
+    # Wait for a minute until we're 15 minutes before the end of the day
+    os.sleep(60)
 
 # It's the end of the day; cancel orders and quit
 alpaca.cancel_all_orders()
