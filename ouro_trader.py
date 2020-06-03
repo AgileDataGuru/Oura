@@ -110,24 +110,40 @@ while (marketopen and not eod) or cmdline.test is True:
     logtime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     prgbar = Bar('  Stocks ' + starttime + ': ', max=len(inboundactions))
 
-    ordercount=ol.GetOrderCount()
-    # loop through the stocks
+    # Bandwagonning happens where trader gets out of sync with pathfinder
+    # and there is an abundance of orders (>10) that need to be bought.
+    # This script will submit buy orders faster than they can be executed
+    # so they're never seen in order count.  This helps limit the effect
+    # of bandwagonning.
+    inboundcount = 0
     for stock in inboundactions:
+        if stock not in boughtlist and stock not in skiplist:
+            inboundcount += 1
+
+    # loop through the inbound stocks
+    for stock in inboundactions:
+        if inboundcount >= 10:
+            # Give the order execution engine time to catch up
+            os.wait(2)
+            # Reduce the risk if bandwaggoning is happening
+            bandwagondiscount = .3
+            logging.debug('Bandwagonning detected; reducing risk and delaying order placement.')
+        else:
+            # This is normal; risk is not modified
+            bandwagondiscount = 1
+
         if stock not in boughtlist and stock not in skiplist:
             # how much is the stock
             stockprice = float(inboundactions[stock].get('price'))
             recenthigh = float(inboundactions[stock].get('recenthigh'))
             recentlow = float(inboundactions[stock].get('recentlow'))
 
-            # get basic account info; I need account.cash for calculations
-            # account = ol.GetAccount()
-            # cash = (float(account.buying_power) / (float(account.multiplier)))-25001 # minimum amount for day trading
-
-            #set max trade risk
-            maxriskamt = cash * maxriskratio
-            traderiskamt = cash * maxriskratio
+            # set max trade risk
+            maxriskamt = cash * maxriskratio * bandwagondiscount
+            traderiskamt = cash * maxriskratio * bandwagondiscount
 
             # how much capital should I use on this trade?
+            ordercount = ol.GetOrderCount()
             if ordercount < 10:
                 # tradecapital = cash / float(10-ordercount)
                 logging.debug('Orders are < 10; trade capital set to ' + str(tradecapital))
@@ -145,31 +161,33 @@ while (marketopen and not eod) or cmdline.test is True:
             traderiskpct = 0
             familyret = 0
 
-            if stock not in boughtlist and ordercount < 10:
+            if ordercount < 10:
                 # reset the skip reason
                 skipreason = 'Unknown'
 
-                # get the family return percent
+                # Get the strategy family and estimated return
                 family = inboundactions[stock].get('strategyfamily')
                 familyret = float(familyreturns[family])
 
-                # set per-share floor price for bracket order
-                # floorprice = stockprice - float(traderiskamt/ordershares)
+                # Set the baseline floor price and percent based on the return rate
                 floorpct = familyret * .5
                 floorprice = stockprice * (1-floorpct)
 
                 # set the ceiling price for the bracket order
                 ceilingprice = stockprice * (1 + float(familyreturns[family]))
 
-                # # Pricing reality check -- are the prices achievable in the recent past?
-                # if ceilingprice > recenthigh:
-                #     ceilingprice = recenthigh - 0.05  # $0.05 under the recent high
-                # if floorprice > recentlow:
-                #     skipreason = 'Proposed stop-loss price already hit today'
-                #     ordershares = 0
+                # Adjust prices to recent high/low if we're using oscilators
+                if family != 'Candlestick':
+                    # Pricing reality check -- are the prices achievable in the recent past?
+                    if ceilingprice > recenthigh:
+                        ceilingprice = recenthigh - 0.05  # $0.05 under the recent high
+                    if floorprice > recentlow:
+                        skipreason = 'Proposed stop-loss price already hit today'
+                        ordershares = 0
 
-                # Adjust the floor price if this looks like a bad pick
+                # Adjust the floor price if there is more risk than reward
                 if (stockprice * ordershares * floorpct) > maxriskamt:
+                    # Use 40% of the ceiling difference as the new floor amount
                     floorprice = stockprice - ((ceilingprice-stockprice) * .4) # I never want to break even on risk
 
                 # Calculate the amount risked on this trade
@@ -297,8 +315,8 @@ while (marketopen and not eod) or cmdline.test is True:
                             'Decision': 'skip',
                             'Reason': skipreason + '; not eligible for retry.'
                         }
-            # Update the order count after submitting the order
-            ordercount = ol.GetOrderCount()
+        # Update the order count after submitting the order
+        ordercount = ol.GetOrderCount()
 
         #advance the progress bar
         prgbar.next()
