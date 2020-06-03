@@ -230,7 +230,7 @@ while (marketopen) or cmdline.test is True:
             # recenttws = df[stock]['TWS'].max()
 
             # Check for must-buy candlesticks
-            if recentkkr > 0 or recenteng > 0 or recentmsr > 0 or recentprc > 0 or recenttws > 0:
+            if recentkkr > 0 or recenteng > 0 or recentmsr > 0:
                 actions[stock] = {
                     'triggertime': datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M'),
                     'strategyfamily': 'Candlestick',
