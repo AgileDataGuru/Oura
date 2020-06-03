@@ -222,11 +222,12 @@ while (marketopen) or cmdline.test is True:
             recentlow = df[stock]['c'].min()
 
             # Find must-buy candlesticks
+            # Only using high-reliability candlesticks
             recentkkr = df[stock]['KKR'].max()
             recenteng = df[stock]['ENG'].max()
             recentmsr = df[stock]['MSR'].max()
-            recentprc = df[stock]['PRC'].max()
-            recenttws = df[stock]['TWS'].max()
+            # recentprc = df[stock]['PRC'].max()
+            # recenttws = df[stock]['TWS'].max()
 
             # Check for must-buy candlesticks
             if recentkkr > 0 or recenteng > 0 or recentmsr > 0 or recentprc > 0 or recenttws > 0:
