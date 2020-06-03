@@ -14,6 +14,7 @@ import datetime                         # used for stock timestamps
 import alpaca_trade_api as tradeapi     # required for interaction with Alpaca
 import csv
 import logging
+import time
 
 # Get Quorum path from environment
 quorumroot = os.environ.get("OURO_QUORUM", "C:\\TEMP")
@@ -47,6 +48,7 @@ except Exception:
 # setup command line
 parser = argparse.ArgumentParser(description="OURO-HISTORY:  Daily stock data ingestion.")
 parser.add_argument("--test", action="store_true", default=False, help="Script runs in test mode.  FALSE (Default) = ignore if the market is closed; TRUE = only run while the market is open")
+parser.add_argument("--marketopen", action="store_true", default=False, help="Force the market to be open for one execution.  FALSE (Default) = query the actual market; TRUE = set the market as open for one execution for testing purposes.")
 cmdline = parser.parse_args()
 logging.info('Command line arguement; test mode is ' + str(cmdline.test))
 
@@ -83,14 +85,21 @@ boughtlist = []
 skiplist = []
 status = {}
 
-# Wait for the market to open unless it's a test
-while not ol.IsOpen() and not cmdline.test:
-    logging.info('Market is closed; waiting for 1 minute.')
-    ol.WaitForMinute()
-
 # Initialize MarketOpen
 marketopen = ol.IsOpen()
 eod = ol.IsEOD()
+
+# Force the market open if configured to do so
+if cmdline.marketopen:
+    logging.info ('Forcing market to be open')
+    marketopen = True
+    eod = False
+
+# Wait for the market to open unless it's a test
+while not marketopen and not cmdline.test:
+    logging.info('Market is closed; waiting for 1 minute.')
+    marketopen = ol.IsOpen()
+    ol.WaitForMinute()
 
 # This is to work around an odd problem with Alpaca and the way it reports cash / buying power
 account = ol.GetAccount()
@@ -100,6 +109,9 @@ tradecapital = cash / 10
 while (marketopen and not eod) or cmdline.test is True:
     marketopen = ol.IsOpen()
     eod = ol.IsEOD()
+
+    # Log info for heartbeat
+    logging.info('Checking inbound stock actions.')
 
     # get ticker actions
     with open(actionpath, 'r', encoding='utf-8') as infile:
@@ -363,21 +375,35 @@ while (marketopen and not eod) or cmdline.test is True:
     # wait until the next minute before checking again
     ol.WaitForMinute()
 
+# Log the transition to end of day processing
+logging.info('Early end-of-day detected; checking for stocks that should be liquidated early.')
+
 # Get stocks that should be sold early
-crs = ol.sqldbcursor()
-query = "select ticker from stockdata..ticker_statistics where sellwhen = 'Early'"
-se = crs.execute(query)
-earlylist = []
-for x in se.fetchall():
-    earlylist.append(x[0])
+try:
+    crs = ol.sqldbcursor()
+    query = "select ticker from stockdata..ticker_statistics where sellwhen = 'Early'"
+    se = crs.execute(query)
+    earlylist = []
+    for x in se.fetchall():
+        earlylist.append(x[0])
+except Exception as ex:
+    logging.error('Could not get list of early stocks.', exc_info=True)
+
+logging.info('15-minute end-of-day check:  ' + str(ol.IsEOD(minutes=15)))
+
+# If forcing the market open, simulate the end of day
+eod = ol.IsEOD(minutes=15)
+if cmdline.marketopen:
+    eod = True
 
 # Start wrapping up the day
-while (not ol.IsEOD(minutes=15)):
+while (not eod):
     # Check if a stock on an open order is in the early-sell list and cancel it
     for stock in ol.GetOrders():
         if stock.symbol in earlylist:
             try:
                 alpaca.cancel_order(stock.id)
+                logging.info('Cancelling open orders for ' + stock.symbol + ' early.')
             except Exception as ex:
                 logging.error('Could not cancel order', exc_info=True)
     # If a held position is in the early sell list, close it
@@ -385,15 +411,27 @@ while (not ol.IsEOD(minutes=15)):
         if stock.symbol in earlylist:
             try:
                 alpaca.close_position(stock.symbol)
+                logging.info('Closing open positions for ' + stock.symbol + ' early.')
             except Exception as ex:
                 logging.error('Could not close position', exc_info=True)
 
     # Wait for a minute until we're 15 minutes before the end of the day
-    os.sleep(60)
+    time.sleep(60)
+
+    # If forcing the market open, simulate the end of day
+    eod = ol.IsEOD(minutes=15)
+    if cmdline.marketopen:
+        eod = True
+    logging.info('15-minute end-of-day check:  ' + str(eod))
+
 
 # It's the end of the day; cancel orders and quit
-alpaca.cancel_all_orders()
-alpaca.close_all_positions()
+logging.info('End of day reached; liquidating all orders.')
+try:
+    alpaca.cancel_all_orders()
+    alpaca.close_all_positions()
+except Exception as ex:
+    logging.error('Could not cancel orders and liquidate positions at the end of the day.', exc_info=True)
 
 
 
