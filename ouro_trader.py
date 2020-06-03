@@ -345,7 +345,7 @@ while (marketopen and not eod) or cmdline.test is True:
         logging.debug('Writing broker status')
         with open (statuspath, 'w', newline='\n', encoding='utf-8') as outfile:
             fieldnames = ['DateTime', 'Ticker', 'Cash', 'TradeCapital', 'BuyPrice', 'BuyLimit', 'MaxRiskAmt',
-                          'TradeRiskAmt', 'RiskPct', 'FamilyReturnPct', 'TradeReturnPct', 'OrderShares', 'RecentHigh',
+                          'TradeRiskAmt', 'TradeRiskPct', 'PortfolioRiskPct', 'RiskPct', 'FamilyReturnPct', 'TradeReturnPct', 'OrderShares', 'RecentHigh',
                           'RecentLow','FloorPrice', 'CeilingPrice', 'Decision', 'Reason']
             writer = csv.DictWriter(outfile, fieldnames=fieldnames)
             # write the header
