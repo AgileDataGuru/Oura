@@ -76,6 +76,16 @@ maxriskratio = .004
 boughtlist = []
 skiplist = []
 status = {}
+closeprices = {}
+
+# Get the closing prices for all the stocks from yesterday
+query = "select ticker, c from stockdata..ohlcv_day o " \
+        "where tradedate in (select dateadd(day, -1, max(tradedate)) from stockdata..ohlcv_day)"
+crs = ol.sqldbcursor()
+crs.execute(query)
+for x in crs.fetchall():
+    closeprices[x[0]] = x[1]
+
 
 # Initialize MarketOpen
 marketopen = ol.IsOpen()
@@ -128,7 +138,7 @@ while (marketopen and not eod) or cmdline.test is True:
     for stock in inboundactions:
         if inboundcount >= 10:
             # Give the order execution engine time to catch up
-            os.sleep(2)
+            time.sleep(2)
             # Reduce the risk if bandwaggoning is happening
             bandwagondiscount = .3
             logging.debug('Bandwagonning detected; reducing risk and delaying order placement.')
@@ -141,6 +151,7 @@ while (marketopen and not eod) or cmdline.test is True:
             stockprice = float(inboundactions[stock].get('price'))
             recenthigh = float(inboundactions[stock].get('recenthigh'))
             recentlow = float(inboundactions[stock].get('recentlow'))
+            yesterdayclose = float(closeprices.get(stock))
 
             # set max trade risk
             maxriskamt = cash * maxriskratio * bandwagondiscount
@@ -171,7 +182,7 @@ while (marketopen and not eod) or cmdline.test is True:
 
                 # Get the strategy family and estimated return
                 family = inboundactions[stock].get('strategyfamily')
-                familyret = float(familyreturns[family])
+                familyret = float(familyreturns[family]) * .8  # It's rare that the average is every filled
 
                 # Set the baseline floor price and percent based on the return rate
                 floorpct = familyret * .5
@@ -203,6 +214,12 @@ while (marketopen and not eod) or cmdline.test is True:
 
                 # Calculate the trade return
                 traderet = (ceilingprice - buylimit) / buylimit
+
+                # Check if the price change between now and yesterday's close is more than
+                # the average for this strategy family.
+                if (stockprice - yesterdayclose) / yesterdayclose >= traderet:
+                    ordershares = 0
+                    skipreason = 'The potential return has already been met today.'
 
                 # Are we planning on making more than we risk?
                 if traderet-.005 <= traderiskpct:

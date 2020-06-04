@@ -104,7 +104,7 @@ for x in slist:
         dts = dt.fetchone()[0]
         startdate = earliest
         if dts is not None:
-            startdate = parse(dts) + timedelta(days=1)
+            startdate = parse(dts) - timedelta(days=1)
     except Exception as ex:
         logging.error('Setting start date to earliest date. ', exc_info=True)
         startdate = earliest
@@ -112,7 +112,6 @@ for x in slist:
     # If the last date was in the past, get new data; otherwise, skip it
     startdate_str = startdate.strftime('%Y-%m-%d')
     if startdate < today:
-
         try:
             logging.info(
                 '(' + str(counter) + ' of ' + str(len(slist)) + ') ' + x + ':  Getting data between ' + startdate_str + ' and ' + today_str)
