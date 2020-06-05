@@ -111,6 +111,15 @@ query = "select ticker, strategy_id, tradedate, v, h-l change from stockdata..oh
         "where (kkr > 0 or msr > 0 or tws > 0) and c > 5 and tradedate = '" + ddate + "' order by v desc"
 
 stockraw = pd.read_sql_query(query, sqlconn)
+
+# Check for a low number and relax the standards if found
+if len(stockraw) < 20:
+    logging.info('Expanding the scope because only ' + str(len(stockraw)) + ' found with strict criteria today.')
+    query = "select ticker, strategy_id, tradedate, v, h-l change from stockdata..ohlcv_day o " \
+            "where (kkr > 0 or msr > 0 or tws > 0 or prc > 0 or eng > 0) " \
+            "and c > 5 and v > 50000 and tradedate = '" + ddate + "' order by v desc"
+    stockraw = pd.read_sql_query(query, sqlconn)
+
 logging.info ('Found ' + str(len(stockraw)) + ' worth monitoring today.')
 if len(stockraw) > 750:
     stocklist = stockraw.nlargest(750, 'v')  # This is about all I can deal with
