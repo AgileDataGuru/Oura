@@ -327,3 +327,100 @@ def GetLastOpenMarket():
     alpaca = tradeapi.REST()
     cal = alpaca.get_calendar(start=startdate.strftime('%Y-%m-%d'), end=today.strftime('%Y-%m-%d'))
     return cal[-1].date.strftime('%Y-%m-%d')
+
+def GetOHLCV(ticker='CVS', timeframe='1Min', startdate='1971-01-21'):
+    # Setup logging specifically for getting data
+    quorumroot = os.environ.get("OURO_QUORUM", "C:\\TEMP")
+    logpath = quorumroot + '\\getohlcv.log'
+
+    # configure logging for this specific process
+    logging.basicConfig(
+        filename=logpath,
+        filemode='a',
+        format='%(asctime)s %(name)s %(levelname)s %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+        level=os.environ.get("LOGLEVEL", "INFO"))
+
+    logging.info('Getting ' + timeframe + ' for ' + ticker + ' on ' + startdate)
+
+    # Initialize the Alpaca API
+    alpaca = tradeapi.REST()
+
+    # Put date strings into usable formats
+    startdate = parse(startdate)
+    s = str(startdate.strftime("%Y-%m-%d")) + ' 09:30'
+    e = str(startdate.strftime("%Y-%m-%d")) + ' 16:30'
+
+    # get the minute-by-minute stock data for the current stock
+    barset = None
+    while barset == None:
+        try:
+            barset = alpaca.get_barset(ticker, timeframe=timeframe, limit=1000,
+                                       start=pd.Timestamp(s, tz='America/New_York').isoformat(),
+                                       end=pd.Timestamp(e, tz='America/New_York').isoformat())
+
+        except Exception as ex:
+            logging.warning('Could not get barset data; retrying # in 10 seconds', exc_info=True)
+            time.sleep(10)
+
+    # Initialize working data structures
+    df = {}
+    raw = {}
+
+    # Convert barset to usable dataframe
+    # Note:  There is typically only one stock in the barset, but I guess there could be more
+    for stock in barset.keys():
+        bars = barset[stock]
+
+        logging.debug('Converting bar data for ' + stock)
+        data = {'ticker': [stock for bar in bars],
+                't': [bar.t for bar in bars],
+                'h': [bar.h for bar in bars],
+                'l': [bar.l for bar in bars],
+                'o': [bar.o for bar in bars],
+                'c': [bar.c for bar in bars],
+                'v': [bar.v for bar in bars]}
+
+        # copy the raw data before doing anything else to it
+        raw[stock] = pd.DataFrame(data)
+
+        # Calculate technical indicators
+        logging.debug('Calculating technical indicators ' + stock)
+        df[stock] = calcind(pd.DataFrame(data))
+
+        # Find the intraday high-low price and tag transaction with BUY/SELL actions
+        if isinstance(df[stock], pd.DataFrame):
+            if not df[stock].empty:
+                if timeframe == '1Min':
+                    # find the highest and lowest price for this stock in this day
+                    highidx = -1
+                    lowidx = -1
+                    high = -1
+                    low = 99999999
+                    for x in df[stock].index:
+                        if df[stock].loc[x, 'h'] > high:
+                            high = df[stock].loc[x, 'h']
+                            highidx = x
+                        if df[stock].loc[x, 'l'] < low:
+                            low = df[stock].loc[x, 'l']
+                            lowidx = x
+
+                    # set the action for training
+                    df[stock].loc[:, 'ACTION'] = 'None'
+                    if lowidx < highidx:
+                        # These are already in time series order; no need to parse the time
+                        df[stock].loc[lowidx, 'ACTION'] = 'Buy'
+                        df[stock].loc[highidx, 'ACTION'] = 'Sell'
+
+                    # Calculate the best profit margin for the day
+                    df[stock].loc[:, 'DAYMARGIN'] = (high - low) / low
+                else:
+                    # We're not processing intraday (1Min) data; so, no actions are required
+                    df[stock].loc['ACTION'] = 'None'
+                    # Calculate the best profit margin for the day
+                    df[stock].loc['DAYMARGIN'] = (df[stock].loc['h'] - df[stock].loc['l']) / df[stock].loc['l']
+    return df[stock]
+
+
+
+
