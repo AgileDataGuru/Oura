@@ -328,7 +328,7 @@ def GetLastOpenMarket():
     cal = alpaca.get_calendar(start=startdate.strftime('%Y-%m-%d'), end=today.strftime('%Y-%m-%d'))
     return cal[-1].date.strftime('%Y-%m-%d')
 
-def GetOHLCV(ticker='CVS', timeframe='1Min', startdate='1971-01-21'):
+def GetOHLCV(ticker='CVS', timeframe='1Min', startdate='1971-01-21', enddate='2020-01-21'):
     # Setup logging specifically for getting data
     quorumroot = os.environ.get("OURO_QUORUM", "C:\\TEMP")
     logpath = quorumroot + '\\getohlcv.log'
@@ -347,11 +347,17 @@ def GetOHLCV(ticker='CVS', timeframe='1Min', startdate='1971-01-21'):
     alpaca = tradeapi.REST()
 
     # Put date strings into usable formats
-    startdate = parse(startdate)
-    s = str(startdate.strftime("%Y-%m-%d")) + ' 09:30'
-    e = str(startdate.strftime("%Y-%m-%d")) + ' 16:30'
+    if timeframe == '1Min':
+        startdate = parse(startdate)
+        s = str(startdate.strftime("%Y-%m-%d")) + ' 09:30'
+        e = str(startdate.strftime("%Y-%m-%d")) + ' 16:30'
+    else:
+        startdate = parse(startdate)
+        enddate = parse(enddate)
+        s = str(startdate.strftime("%Y-%m-%d"))
+        e = str(enddate.strftime("%Y-%m-%d"))
 
-    # get the minute-by-minute stock data for the current stock
+    # get the stock data for the current stock
     barset = None
     while barset == None:
         try:
@@ -384,42 +390,7 @@ def GetOHLCV(ticker='CVS', timeframe='1Min', startdate='1971-01-21'):
         # copy the raw data before doing anything else to it
         raw[stock] = pd.DataFrame(data)
 
-        # Calculate technical indicators
-        logging.debug('Calculating technical indicators ' + stock)
-        df[stock] = calcind(pd.DataFrame(data))
-
-        # Find the intraday high-low price and tag transaction with BUY/SELL actions
-        if isinstance(df[stock], pd.DataFrame):
-            if not df[stock].empty:
-                if timeframe == '1Min':
-                    # find the highest and lowest price for this stock in this day
-                    highidx = -1
-                    lowidx = -1
-                    high = -1
-                    low = 99999999
-                    for x in df[stock].index:
-                        if df[stock].loc[x, 'h'] > high:
-                            high = df[stock].loc[x, 'h']
-                            highidx = x
-                        if df[stock].loc[x, 'l'] < low:
-                            low = df[stock].loc[x, 'l']
-                            lowidx = x
-
-                    # set the action for training
-                    df[stock].loc[:, 'ACTION'] = 'None'
-                    if lowidx < highidx:
-                        # These are already in time series order; no need to parse the time
-                        df[stock].loc[lowidx, 'ACTION'] = 'Buy'
-                        df[stock].loc[highidx, 'ACTION'] = 'Sell'
-
-                    # Calculate the best profit margin for the day
-                    df[stock].loc[:, 'DAYMARGIN'] = (high - low) / low
-                else:
-                    # We're not processing intraday (1Min) data; so, no actions are required
-                    df[stock].loc['ACTION'] = 'None'
-                    # Calculate the best profit margin for the day
-                    df[stock].loc['DAYMARGIN'] = (df[stock].loc['h'] - df[stock].loc['l']) / df[stock].loc['l']
-    return df[stock]
+    return raw[stock]
 
 
 
