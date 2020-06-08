@@ -400,6 +400,15 @@ def WriteOHLCV(df=None, timeframe='1Min'):
     # Setup the output file
     quorumroot = os.environ.get("OURO_QUORUM", "C:\\TEMP")
     outpath = quorumroot + '\\ohlcv_' + datetime.now().strftime("%Y%m%d") + '_' + timeframe + '.csv'
+    logpath = quorumroot + '\\WriteOHLCV.log'
+
+    # Setup Logging
+    logging.basicConfig(
+        filename=logpath,
+        filemode='a',
+        format='%(asctime)s %(name)s %(levelname)s %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+        level=os.environ.get("LOGLEVEL", "INFO"))
 
     # Setup the cursor for SQL Server
     crs = sqldbcursor()
@@ -431,8 +440,7 @@ def WriteOHLCV(df=None, timeframe='1Min'):
     try:
         crs.execute(qry)
     except Exception as ex:
-        print(qry)
-        print(ex)
+        logging.error(qry, exc_info=True)
 
     # Write the data to SQL Server in one transaction
     qry = "INSERT INTO stockdata.." + tn + " (ticker, tradedate, tradedatetime, t, o, h, l, c, v, stage) VALUES "
@@ -460,8 +468,7 @@ def WriteOHLCV(df=None, timeframe='1Min'):
     try:
         crs.execute(qry)
     except Exception as ex:
-        print(qry)
-        print(ex)
+        logging.error(qry, exc_info=True)
 
     with open (outpath, 'a', newline='\n', encoding='utf-8') as outfile:
         df.to_csv(outfile, header=False, index=False)
