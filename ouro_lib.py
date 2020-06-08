@@ -329,6 +329,8 @@ def GetLastOpenMarket():
     return cal[-1].date.strftime('%Y-%m-%d')
 
 def GetOHLCV(ticker='CVS', timeframe='1Min', startdate='1971-01-21', enddate='2020-01-21'):
+    # Gets single stock data from Alpaca given the specified date
+
     # Setup logging specifically for getting data
     quorumroot = os.environ.get("OURO_QUORUM", "C:\\TEMP")
     logpath = quorumroot + '\\getohlcv.log'
@@ -391,6 +393,84 @@ def GetOHLCV(ticker='CVS', timeframe='1Min', startdate='1971-01-21', enddate='20
         raw[stock] = pd.DataFrame(data)
 
     return raw[stock]
+
+def WriteOHLCV(df=None, timeframe='1Min'):
+    # Writes stock data to SQL Server and disk
+
+    # Setup the output file
+    quorumroot = os.environ.get("OURO_QUORUM", "C:\\TEMP")
+    outpath = quorumroot + '\\ohlcv_' + datetime.now().strftime("%Y%m%d") + '_' + timeframe + '.csv'
+
+    # Setup the cursor for SQL Server
+    crs = sqldbcursor()
+
+    # set the destination table
+    tn = None
+    if timeframe == '1Min':
+        tn = 'ohlcv_minute'
+    else:
+        tn = 'ohlcv_day'
+
+    # delete the data from SQL Server
+    qry = "DELETE FROM stockdata.." + tn + " WHERE "
+    first=True
+    for index, row in df.iterrows():
+        # Add OR at the end if this isn't the first time in the loop
+        if first:
+            first = False
+        else:
+            qry = qry + ' or '
+
+        # use the right keys in the WHERE clause
+        if timeframe == '1Min':
+            qry = qry + "(ticker = '" + row['ticker'] + "' AND t = '" + str(row['t'].strftime("%Y-%m-%d %H:%M%S")) + "-5:00')"
+        else:
+            qry = qry + "(ticker = '" + row['ticker'] + "' AND tradedate = '" + str(row['t'].strftime("%Y-%m-%d")) + "')"
+
+    # Execute the delete query
+    try:
+        crs.execute(qry)
+    except Exception as ex:
+        print(qry)
+        print(ex)
+
+    # Write the data to SQL Server in one transaction
+    qry = "INSERT INTO stockdata.." + tn + " (ticker, tradedate, tradedatetime, t, o, h, l, c, v, stage) VALUES "
+    first=True
+    for index, row in df.iterrows():
+    # Write to SQL via INSERT or UPDATE, depending if the row exists or not
+        if first:
+            first = False
+        else:
+            qry = qry + ', '
+
+        # Add the value
+        qry = qry + "('" + str(row['ticker']) + "'" \
+                    ", '" + str(row['t'].strftime("%Y-%m-%d")) + "'" \
+                    ", '" + str(row['t'].strftime("%Y-%m-%d %H:%M")) + "'" \
+                    ", '" + str(row['t'].strftime("%Y-%m-%d %H:%M%S")) + "-5:00'" \
+                    ", '" + str(row['o']) + "'" \
+                    ", '" + str(row['h']) + "'" \
+                    ", '" + str(row['l']) + "'" \
+                    ", '" + str(row['c']) + "'" \
+                    ", '" + str(row['v']) + "'" \
+                    ", 'Ouro')"
+
+    # Execute the query
+    try:
+        crs.execute(qry)
+    except Exception as ex:
+        print(qry)
+        print(ex)
+
+    with open (outpath, 'a', newline='\n', encoding='utf-8') as outfile:
+        df.to_csv(outfile, header=False, index=False)
+
+
+
+
+
+
 
 
 
