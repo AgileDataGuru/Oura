@@ -96,7 +96,6 @@ for x in slist:
     startdate_str = startdate.strftime('%Y-%m-%d')
     if startdate < today:
         try:
-            print("day", x, startdate_str, today_str)
             logging.info('Getting data between ' + startdate_str + ' and ' + today_str + ' for ' + x)
             data = ol.GetOHLCV(ticker=x, startdate=startdate_str, enddate=today_str, timeframe='1D')
         except Exception as ex:
