@@ -71,7 +71,8 @@ yesterday = today - datetime.timedelta(days=1)
 earliest = today - datetime.timedelta(days=180)
 
 # Create a progress bar
-prgbar = Bar('  Stocks',  max=len(slist))
+prgbar = Bar('  Stocks', max=len(slist)+1, suffix='%(index)d/%(max)d %(percent).1f%% - %(eta)ds')
+prgbar.next()
 
 for x in slist:
     ###
