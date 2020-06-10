@@ -102,11 +102,14 @@ for x in slist:
         except Exception as ex:
             logging.warning ('Data for ' + x + ' has problems; it is being skipped.', exc_info=True)
 
-        try:
-            logging.info('Writing day-interval data for ' + x)
-            ol.WriteOHLCV(data, timeframe='1D')
-        except Exception as ex:
-            logging.error('Could not write day-interval data for' + x, exc_info=True)
+        if not data.empty:
+            try:
+                logging.info('Writing day-interval data for ' + x)
+                ol.WriteOHLCV(data, timeframe='1D')
+            except Exception as ex:
+                logging.error('Could not write day-interval data for' + x, exc_info=True)
+        else:
+            logging.info('No day-interval data for ' + x + ' on ' + startdate_str + '; not writing anything.')
 
     ###
     # MINUTE TIMEFRAME ACTIONS
@@ -140,11 +143,14 @@ for x in slist:
             logging.warning ('Minute-data for ' + x + ' has problems; it is being skipped.', exc_info=True)
 
         # Write the data
-        try:
-            logging.info('Writing day-interval data for ' + x)
-            ol.WriteOHLCV(data, timeframe='1Min')
-        except Exception as ex:
-            logging.error('Could not write minute-interval data for' + x, exc_info=True)
+        if not data.empty:
+            try:
+                logging.info('Writing day-interval data for ' + x)
+                ol.WriteOHLCV(data, timeframe='1Min')
+            except Exception as ex:
+                logging.error('Could not write minute-interval data for' + x, exc_info=True)
+        else:
+            logging.info('No minute-interval data for ' + x + ' on ' + startdate_str + '; not writing anything.')
 
         # move onto the next day
         startdate = startdate + timedelta(days=1)
