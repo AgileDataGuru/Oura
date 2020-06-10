@@ -18,7 +18,7 @@ REM Set the archive directory
 SET ad=%OURO_QUORUM%\%DATE:~10,4%%DATE:~4,2%%DATE:~7,2%
 
 REM Make the archive folder
-mkdir ad
+mkdir %ad%
 
 REM Move the files
 robocopy %OURO_QUORUM% %ad% /MOV
