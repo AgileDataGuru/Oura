@@ -86,11 +86,14 @@ for x in slist:
         startdate = earliest
         dts = ol.qrysqldb(sqlc, query).fetchone()[0]
         if dts is not None:
-            # This is probably wrong; want to start from the last date and add one day so I get the next day
-            # startdate = parse(dts) - timedelta(days=1)
-            startdate = parse(dts) + timedelta(days=1)
+            try:
+                # sometimes dts is a string
+                startdate = parse(dts) + timedelta(days=1)
+            except:
+                # sometimes dts is a date
+                startdate = dts + timedelta(days=1)
     except Exception as ex:
-        logging.error('Setting start date to earliest date. ', exc_info=True)
+        logging.error('Setting day interval start date to earliest date. ', exc_info=True)
         startdate = earliest
 
     # If the last date was in the past, get new data; otherwise, skip it
@@ -125,9 +128,14 @@ for x in slist:
         startdate = earliest
         dts = ol.qrysqldb(sqlc, query).fetchone()[0]
         if dts is not None:
-            startdate = parse(dts) + timedelta(days=1)
+            try:
+                # sometimes dts is a string
+                startdate = parse(dts) + timedelta(days=1)
+            except:
+                # sometimes dts is a date
+                startdate = dts + timedelta(days=1)
     except Exception as ex:
-        logging.error('Setting start date to earliest date. ', exc_info=True)
+        logging.error('Setting minute-interval start date to earliest date. ', exc_info=True)
         startdate = earliest
 
     # Loop through each day until we get caught up
