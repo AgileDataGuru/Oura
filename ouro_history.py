@@ -87,10 +87,14 @@ earliest = today - datetime.timedelta(days=180)
 prgbar = Bar('  Stocks', max=len(slist)+1, suffix='%(index)d/%(max)d %(percent).1f%% - %(eta)ds  ')
 prgbar.next()
 
+# Are we going to skip minute data
+skipmindata = True  # By default, assume we're skipping minute data
+
 for x in slist:
     ###
     # DAY TIMEFRAME ACTIONS
     ###
+
     if cmdline.dd:
         # Calculate the last day-date for the stock
         query = "SELECT MAX(tradedate) FROM stockdata..ohlcv_day WHERE ticker = '" + x + "';"
@@ -122,10 +126,12 @@ for x in slist:
                 try:
                     logging.info('Writing day-interval data for ' + x)
                     ol.WriteOHLCV(data, timeframe='1D')
+                    skipmindata = False # Minute data is only eligible if there is day data
                 except Exception as ex:
                     logging.error('Could not write day-interval data for' + x, exc_info=True)
             else:
                 logging.info('No day-interval data for ' + x + ' on ' + startdate_str + '; not writing anything.')
+                skipmindata = True  # This confirms that we need to skip minute data
     else:
         logging.info('Skipping daily data for ' + x + ' by request.')
 
@@ -154,7 +160,7 @@ for x in slist:
             startdate = earliest
 
         # Loop through each day until we get caught up
-        while startdate < today:
+        while startdate < today and not skipmindata:
             # Set the start date
             startdate_str = startdate.strftime('%Y-%m-%d')
 
