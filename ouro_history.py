@@ -174,11 +174,20 @@ for x in slist:
                     logging.error('Could not write minute-interval data for' + x, exc_info=True)
             else:
                 logging.info('No minute-interval data for ' + x + ' on ' + startdate_str + '; not writing anything.')
+
+            # move onto the next day
+            startdate = startdate + timedelta(days=1)
+
     else:
         logging.info('Skipping minute data for ' + x + ' by request.')
 
-    # move onto the next day
-    startdate = startdate + timedelta(days=1)
+    ###
+    # TECHNICAL INDICATORS
+    ###
+
+
+
+
 
     prgbar.next()
 
