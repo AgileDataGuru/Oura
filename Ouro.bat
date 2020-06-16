@@ -12,7 +12,7 @@ REM Tally daily totals
 py %OURO_INSTALL%\oura_Accountant.py
 
 REM Get daily history
-py %OURO_INSTALL%\ouro_history.py --dd --mm --id
+py %OURO_INSTALL%\ouro_history.py --dd --md --id
 
 REM Set the archive directory
 SET ad=%OURO_QUORUM%\%DATE:~10,4%%DATE:~4,2%%DATE:~7,2%
