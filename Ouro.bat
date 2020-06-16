@@ -8,11 +8,11 @@ REM https://github.com/AgileDataGuru/Ouro
 REM Install path is %OURO_INSTALL%
 REM Quorum path is %OURO_QUORUM%
 
-REM Get daily history
-py %OURO_INSTALL%\daily_history.py
+REM Tally daily totals
+py %OURO_INSTALL%\ouro_accountant.py
 
-REM Calculate daily technical indicators
-py %OURO_INSTALL%\daily_ticalc.py
+REM Get daily history
+py %OURO_INSTALL%\ouro_history.py
 
 REM Set the archive directory
 SET ad=%OURO_QUORUM%\%DATE:~10,4%%DATE:~4,2%%DATE:~7,2%
@@ -22,6 +22,3 @@ mkdir %ad%
 
 REM Move the files
 robocopy %OURO_QUORUM% %ad% /MOV
-
-REM Tally daily totals
-py %OURO_INSTALL%\ouro_accountant.py

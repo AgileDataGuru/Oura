@@ -18,6 +18,7 @@ import time
 import argparse
 import ouro_lib as ol
 from progress.bar import Bar            # for progress bars
+import pandas as pd
 
 # Set required paths
 quorumroot = os.environ.get("OURO_QUORUM", "C:\\TEMP")
@@ -76,6 +77,7 @@ logging.info('Universe of stocks created; ' + str(len(slist)) + ' stocks in the 
 
 # Initialize SQL connection
 sqlc = ol.sqldbcursor()
+sqlconn = ol.sqldbconn()
 
 # configure common dates
 today = datetime.datetime.utcnow()
@@ -190,6 +192,43 @@ for x in slist:
     ###
     # TECHNICAL INDICATORS
     ###
+
+    if cmdline.id or cmdline.recalc:
+        # Create day and minute queries to get data
+        dqry = "SELECT ticker, tradedate, h, l, o, c, v FROM stockdata..ohlcv_day where ticker = '" + x + "' order by tradedate asc"
+        mqry = "SELECT ticker, tradedatetime, h, l, o, c, v FROM stockdata..ohlcv_minute where ticker = '" + x + "' order by tradedatetime asc"
+
+        # Calculate the indicators
+        ddf = ol.calcind(pd.read_sql_query(dqry, sqlconn))
+        mdf = ol.calcind(pd.read_sql_query(mqry, sqlconn))
+
+        # Create day and minute queries for dates to be updated
+        dqry = "SELECT tradedate FROM stockdata..ohlcv_day where ticker = '" + x + "'"
+        mqry = "SELECT tradedatetime FROM stockdata..ohlcv_minute where ticker = '" + x + "'"
+        if not cmdline.recalc:
+            # limit this to only dates where the strategy doesn't exist
+            mqry = mqry + ' AND strategy_id IS NULL'
+            dqry = dqry + ' AND strategy_id IS NULL'
+
+        # create day-date list
+        ddates = []
+        for d in ol.qrysqldb(sqlc, dqry).fetchall():
+            ddates.append(d[0])
+
+        # create minute-date list
+        mdates = []
+        for d in ol.qrysqldb(sqlc, mqry).fetchall():
+            mdates.append(d[0].strftime("%Y-%m-%d %H:%M:%S"))
+        print (mdf['tradedatetime'])
+        quit()
+
+
+        #ol.WriteIndicators(ticker=x, dates=)
+
+
+
+
+
 
 
 
